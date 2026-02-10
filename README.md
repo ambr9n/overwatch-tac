@@ -1,6 +1,6 @@
 # DEVELOPER'S GUIDE THROUGH GITHUB 
 - Please utilize this document to do near anything for github [KEEP PRIVATE]:
-- ```https://docs.google.com/document/d/1S6pNiXzG_qyhtcBZFgGA7HkSkorqIMSemiDx7ovSujk/edit?usp=sharing```
+- `https://docs.google.com/document/d/1S6pNiXzG_qyhtcBZFgGA7HkSkorqIMSemiDx7ovSujk/edit?usp=sharing`
 - `must dlt`
 
 # OVERWATCH-TAC

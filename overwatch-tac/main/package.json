@@ -1,11 +1,14 @@
 {
-  "devDependencies": {
-    "concurrently": "^9.2.1"
-  },
-  "name": "main",
+  "name": "overwatch-tac-main",
   "version": "1.0.0",
-  "description": "",
+  "description": "Root package.json to run both frontend and backend",
   "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "client": "npm run dev --prefix client",
+    "server": "npm start --prefix server",
+    "start": "concurrently \"npm run server\" \"npm run client\""
+  },
   "dependencies": {
     "ansi-regex": "^5.0.1",
     "ansi-styles": "^4.3.0",
@@ -31,13 +34,10 @@
     "yargs": "^17.7.2",
     "yargs-parser": "^21.1.1"
   },
-  "scripts": {
-    "client": "npm run dev --prefix client",
-    "server": "npm run dev --prefix server",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "license": "ISC"
 }

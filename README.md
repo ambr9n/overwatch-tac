@@ -19,20 +19,12 @@
 ## Installation
 
 ### Prerequisites
--   [MUST ADD]
--   
+-   Vite
 
 ### Build and Run
-1.  [MUST ADD]
+1.  run ```npm install```
 
-2.  Build the project using Maven:
-    ```EXAMPLE
-    markdown example
-    ```
-
-    ```example2
-    MARKDOWN EXAMPLE
-    ```
+2.  run ```npm start```
 
 ## Usage
 

@@ -2,7 +2,6 @@
   "name": "overwatch-tac-main",
   "version": "1.0.0",
   "description": "Root package.json to run both frontend and backend",
-  "main": "index.js",
   "type": "commonjs",
   "scripts": {
     "client": "npm run dev --prefix client",

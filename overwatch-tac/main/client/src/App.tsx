@@ -4,7 +4,7 @@ import Home from "./pages/Home";
 import TacMap from "./pages/TacMap";
 import Saves from "./pages/Saves";
 import Auth from "./pages/SignUp";
-import Login from "./pages/login";
+import Login from "./pages/Login";
 
 const App = () => {
   return (

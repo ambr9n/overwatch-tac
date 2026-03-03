@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const Navbar = () => {
   const linkStyle =
-    "margin-right: 20px; text-decoration: none; font-weight: bold;";
+  "marginRight: 20px; textDecoration: none; fontWeight: bold;";
 
   return (
     <div style={{ padding: "20px", background: "#111" }}>
@@ -18,7 +18,11 @@ const Navbar = () => {
         Saves
       </NavLink>
 
-      <NavLink to="/auth" style={{ color: "white" }}>
+      <NavLink to="/auth" style={{ marginRight: "20px",color: "white" }}>
+        Sign Up
+      </NavLink>
+
+      <NavLink to="/login" style={{ marginRight: "20px",color: "white" }}>
         Login
       </NavLink>
     </div>

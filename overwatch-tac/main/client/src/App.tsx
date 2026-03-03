@@ -5,16 +5,20 @@ import TacMap from "./pages/TacMap";
 import Saves from "./pages/Saves";
 import Auth from "./pages/Auth";
 
-const App: React.FC = () => {
+const App = () => {
   return (
     <Router>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/tacmap" element={<TacMap />} />
-        <Route path="/saves" element={<Saves />} />
-        <Route path="/auth" element={<Auth />} />
-      </Routes>
+      <div style={{ minHeight: "100vh", background: "#111", color: "white" }}>
+        <Navbar />
+        <main style={{ padding: "40px" }}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/tacmap" element={<TacMap />} />
+            <Route path="/saves" element={<Saves />} />
+            <Route path="/auth" element={<Auth />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
   );
 };

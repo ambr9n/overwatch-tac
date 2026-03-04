@@ -4,13 +4,13 @@ const Home = () => {
     <div style={{ padding: "40px", textAlign: "center" }}>
       <h1 style={{ fontSize: "48px", marginBottom: "20px" }}>
         {/* HEADER */}
-        Overwatch Tac Map [temp] {/* we can choose aa proper name in the future before final, delete comment before final */}
+        Overwatch Tac Map {/* we can choose aa proper name in the future before final, delete comment before final */}
       </h1>
 
       <p style={{ fontSize: "18px", color: "#ccc" }}>
         {/* SUBHEADER */}
         {/* TEMPORARY, must change the temporary name, and the caption, delete this cimment before review, delete comment before final */}
-        overwatch-tac-temp is a tool built for Overwatch 2 players to strategize, coordinate, and develop plans to win! 
+        Overwatch Tactical Map is a tool built for Overwatch 2 players to strategize, coordinate, and develop plans to win! 
       </p>
 
       <div style={{ marginTop: "40px" }}>
@@ -29,7 +29,7 @@ const Home = () => {
         >
         {/* LABEL IN BUTTON */}
         {/* POTENTIALLY */}
-          Start Planning
+          Get Started
         </a>
       </div>
     </div>

@@ -1,30 +1,54 @@
 import { NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { auth } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
+import "./Navbar.css";
 
 const Navbar = () => {
-  const linkStyle =
-  "marginRight: 20px; textDecoration: none; fontWeight: bold;";
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+
+    return () => unsub();
+  }, []);
 
   return (
-    <div style={{ padding: "20px", background: "#111" }}>
-      <NavLink to="/" style={{ marginRight: "20px", color: "white" }}>
-        Home
-      </NavLink>
+    <div className="navbar">
+      <div className="nav-left">
+        <NavLink to="/" end className="nav-link">
+          Home
+        </NavLink>
 
-      <NavLink to="/tacmap" style={{ marginRight: "20px", color: "white" }}>
-        Tac Map
-      </NavLink>
+        <NavLink to="/tacmap" className="nav-link">
+          Tac Map
+        </NavLink>
 
-      <NavLink to="/saves" style={{ marginRight: "20px", color: "white" }}>
-        Saves
-      </NavLink>
+        <NavLink to="/saves" className="nav-link">
+          Saves
+        </NavLink>
+      </div>
 
-      <NavLink to="/auth" style={{ marginRight: "20px",color: "white" }}>
-        Sign Up
-      </NavLink>
+      <div className="nav-right">
+        {user ? (
+          <NavLink to="/profile" className="nav-link login">
+            Profile
+          </NavLink>
+        ) : (
+          <>
+            <NavLink to="/auth" className="nav-link signup">
+              Sign Up
+            </NavLink>
 
-      <NavLink to="/login" style={{ marginRight: "20px",color: "white" }}>
-        Login
-      </NavLink>
+            <NavLink to="/login" className="nav-link login">
+              Sign In
+            </NavLink>
+          </>
+        )}
+      </div>
     </div>
   );
 };

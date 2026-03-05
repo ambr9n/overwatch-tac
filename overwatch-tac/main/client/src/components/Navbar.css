@@ -1,0 +1,59 @@
+.navbar {
+  padding: 16px 40px;
+  background: linear-gradient(90deg, #140a2a, #0f051f);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Group left navigation links */
+.nav-left {
+  display: flex;
+  gap: 30px;
+}
+
+/* Group right auth links */
+.nav-right {
+  display: flex;
+  gap: 15px;
+}
+
+.nav-link {
+  text-decoration: none;
+  font-weight: 600;
+  color: #cfcfe8;
+  transition: 0.2s ease;
+}
+
+/* Hover */
+.nav-link:hover {
+  color: white;
+}
+
+/* Active route */
+.nav-link.active {
+  color: #a855f7;
+}
+
+/* Auth buttons styling */
+.signup {
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: #e9d5ff;
+  color: #7e22ce !important;
+}
+
+.signup:hover {
+  background: #d8b4fe;
+}
+
+.login {
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #9333ea, #ec4899);
+  color: white !important;
+}
+
+.login:hover {
+  opacity: 0.85;
+}

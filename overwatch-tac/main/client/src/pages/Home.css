@@ -1,0 +1,67 @@
+.home {
+  min-height: 100vh;
+  position: relative;
+  background: url(/public/images/rigby.png) center/cover no-repeat; /* Chanages image name */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Dark purple overlay */
+.home::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(20, 10, 42, 0.4),
+    rgba(15, 5, 31, 0.65),
+    rgba(147, 51, 234, 0.25)
+  );
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  padding: 40px;
+  max-width: 900px;
+}
+
+.hero-title {
+  font-size: 56px;
+  margin-bottom: 20px;
+  color: white;
+  font-weight: 800;
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, #a855f7, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+  font-size: 20px;
+  color: #d1d5db;
+  margin-bottom: 40px;
+}
+
+.hero-buttons {
+  margin-top: 20px;
+}
+
+.primary-btn {
+  padding: 14px 32px;
+  border-radius: 12px;
+  text-decoration: none;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(90deg, #9333ea, #ec4899);
+  transition: 0.2s ease;
+}
+
+.primary-btn:hover {
+  opacity: 0.85;
+  transform: translateY(-2px);
+}

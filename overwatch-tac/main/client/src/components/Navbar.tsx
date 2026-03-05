@@ -1,11 +1,23 @@
 import { NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { auth } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
 import "./Navbar.css";
 
 const Navbar = () => {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+
+    return () => unsub();
+  }, []);
+
   return (
     <div className="navbar">
-      
-      {/* Left side navigation */}
       <div className="nav-left">
         <NavLink to="/" end className="nav-link">
           Home
@@ -20,17 +32,23 @@ const Navbar = () => {
         </NavLink>
       </div>
 
-      {/* Right side auth buttons */}
       <div className="nav-right">
-        <NavLink to="/auth" className="nav-link signup">
-          Sign Up
-        </NavLink>
+        {user ? (
+          <NavLink to="/profile" className="nav-link login">
+            Profile
+          </NavLink>
+        ) : (
+          <>
+            <NavLink to="/auth" className="nav-link signup">
+              Sign Up
+            </NavLink>
 
-        <NavLink to="/login" className="nav-link login">
-          Sign In
-        </NavLink>
+            <NavLink to="/login" className="nav-link login">
+              Sign In
+            </NavLink>
+          </>
+        )}
       </div>
-
     </div>
   );
 };

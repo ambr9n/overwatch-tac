@@ -5,6 +5,7 @@ import TacMap from "./pages/TacMap";
 import Saves from "./pages/Saves";
 import Auth from "./pages/SignUp";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 
 const App = () => {
   return (
@@ -18,6 +19,7 @@ const App = () => {
             <Route path="/saves" element={<Saves />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/profile" element={<Profile />} />
           </Routes>
         </main>
       </div>

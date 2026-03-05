@@ -1,30 +1,36 @@
 import { NavLink } from "react-router-dom";
+import "./Navbar.css";
 
 const Navbar = () => {
-  const linkStyle =
-  "marginRight: 20px; textDecoration: none; fontWeight: bold;";
-
   return (
-    <div style={{ padding: "20px", background: "#111" }}>
-      <NavLink to="/" style={{ marginRight: "20px", color: "white" }}>
-        Home
-      </NavLink>
+    <div className="navbar">
+      
+      {/* Left side navigation */}
+      <div className="nav-left">
+        <NavLink to="/" end className="nav-link">
+          Home
+        </NavLink>
 
-      <NavLink to="/tacmap" style={{ marginRight: "20px", color: "white" }}>
-        Tac Map
-      </NavLink>
+        <NavLink to="/tacmap" className="nav-link">
+          Tac Map
+        </NavLink>
 
-      <NavLink to="/saves" style={{ marginRight: "20px", color: "white" }}>
-        Saves
-      </NavLink>
+        <NavLink to="/saves" className="nav-link">
+          Saves
+        </NavLink>
+      </div>
 
-      <NavLink to="/auth" style={{ marginRight: "20px",color: "white" }}>
-        Sign Up
-      </NavLink>
+      {/* Right side auth buttons */}
+      <div className="nav-right">
+        <NavLink to="/auth" className="nav-link signup">
+          Sign Up
+        </NavLink>
 
-      <NavLink to="/login" style={{ marginRight: "20px",color: "white" }}>
-        Login
-      </NavLink>
+        <NavLink to="/login" className="nav-link login">
+          Sign In
+        </NavLink>
+      </div>
+
     </div>
   );
 };

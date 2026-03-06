@@ -38,13 +38,11 @@ export default function Forum() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [replyInputs, setReplyInputs] = useState<{ [key: string]: string }>({});
+  const [showPostBox, setShowPostBox] = useState(false);
 
   // REALTIME POSTS
   useEffect(() => {
-    const q = query(
-      collection(db, "forumPosts"),
-      orderBy("timestamp", "desc")
-    );
+    const q = query(collection(db, "forumPosts"), orderBy("timestamp", "desc"));
 
     const unsub = onSnapshot(q, (snapshot) => {
       const loadedPosts: ForumPost[] = snapshot.docs.map((docSnap) => {
@@ -88,6 +86,13 @@ export default function Forum() {
     });
 
     setNewMessage("");
+    setShowPostBox(false);
+  };
+
+  // DELETE POST
+  const deletePost = async (postId: string) => {
+    if (!window.confirm("Delete this post?")) return;
+    await deleteDoc(doc(db, "forumPosts", postId));
   };
 
   // LIKE
@@ -104,15 +109,7 @@ export default function Forum() {
     });
   };
 
-  // DELETE POST
-  const deletePost = async (postId: string) => {
-    const confirmDelete = window.confirm("Delete this post?");
-    if (!confirmDelete) return;
-
-    await deleteDoc(doc(db, "forumPosts", postId));
-  };
-
-  // REPLY
+  // ADD REPLY
   const addReply = async (post: ForumPost) => {
     if (!auth.currentUser) return;
 
@@ -136,45 +133,85 @@ export default function Forum() {
   };
 
   return (
-    <div style={{ maxWidth: 900, margin: "auto" }}>
-      <h1>Forum</h1>
+    <div
+      style={{
+        maxWidth: 900,
+        margin: "auto",
+        padding: 20
+      }}
+    >
+      <h1 style={{ marginBottom: 30 }}>Forum</h1>
 
-      {/* CREATE POST */}
-      <div style={{ marginBottom: 40 }}>
-        <textarea
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Write a post..."
-          style={{
-            width: "100%",
-            padding: 12,
-            background: "#222",
-            color: "white",
-            border: "1px solid #444"
-          }}
-        />
+      {/* CREATE POST BUTTON */}
+      <button
+        onClick={() => setShowPostBox(!showPostBox)}
+        style={{
+          padding: "10px 20px",
+          borderRadius: 6,
+          border: "1px solid #444",
+          background: "#222",
+          color: "white",
+          cursor: "pointer",
+          marginBottom: 20
+        }}
+      >
+        {showPostBox ? "Cancel" : "Create Post"}
+      </button>
 
-        <button
-          onClick={createPost}
+      {/* POST BOX */}
+      {showPostBox && (
+        <div
           style={{
-            marginTop: 10,
-            padding: "10px 20px",
-            cursor: "pointer"
+            border: "1px solid #333",
+            padding: 20,
+            borderRadius: 8,
+            background: "#1b1b1b",
+            marginBottom: 30
           }}
         >
-          Post
-        </button>
-      </div>
+          <textarea
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Write something..."
+            style={{
+              width: "100%",
+              padding: 12,
+              borderRadius: 6,
+              border: "1px solid #444",
+              background: "#111",
+              color: "white",
+              minHeight: 80
+            }}
+          />
+
+          <button
+            onClick={createPost}
+            style={{
+              marginTop: 10,
+              padding: "10px 18px",
+              borderRadius: 6,
+              border: "none",
+              background: "#3a7afe",
+              color: "white",
+              cursor: "pointer"
+            }}
+          >
+            Post
+          </button>
+        </div>
+      )}
 
       {/* POSTS */}
       {posts.map((post) => (
         <div
           key={post.id}
           style={{
-            border: "1px solid #333",
+            border: "1px solid #2e2e2e",
+            borderRadius: 10,
             padding: 20,
-            marginBottom: 30,
-            background: "#1a1a1a"
+            marginBottom: 25,
+            background: "#181818",
+            boxShadow: "0 0 10px rgba(0,0,0,0.4)"
           }}
         >
           {/* AUTHOR */}
@@ -196,7 +233,11 @@ export default function Forum() {
             <div>
               <Link
                 to={`/profile/${post.authorId}`}
-                style={{ color: "white", fontWeight: "bold" }}
+                style={{
+                  color: "white",
+                  fontWeight: "bold",
+                  textDecoration: "none"
+                }}
               >
                 {post.authorName}
               </Link>
@@ -213,14 +254,9 @@ export default function Forum() {
           <p style={{ marginTop: 15 }}>{post.message}</p>
 
           {/* ACTIONS */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => likePost(post)}>
-              👍 {post.likes}
-            </button>
-
-            <button onClick={() => dislikePost(post)}>
-              👎 {post.dislikes}
-            </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => likePost(post)}>👍 {post.likes}</button>
+            <button onClick={() => dislikePost(post)}>👎 {post.dislikes}</button>
 
             {auth.currentUser?.uid === post.authorId && (
               <button
@@ -231,6 +267,7 @@ export default function Forum() {
                   color: "white",
                   border: "none",
                   padding: "5px 10px",
+                  borderRadius: 4,
                   cursor: "pointer"
                 }}
               >
@@ -247,7 +284,9 @@ export default function Forum() {
                 style={{
                   display: "flex",
                   gap: 10,
-                  marginTop: 10
+                  marginTop: 10,
+                  padding: 10,
+                  borderLeft: "2px solid #333"
                 }}
               >
                 <Link to={`/profile/${reply.authorId}`}>
@@ -267,7 +306,11 @@ export default function Forum() {
                 <div>
                   <Link
                     to={`/profile/${reply.authorId}`}
-                    style={{ color: "white", fontWeight: "bold" }}
+                    style={{
+                      color: "white",
+                      fontWeight: "bold",
+                      textDecoration: "none"
+                    }}
                   >
                     {reply.authorName}
                   </Link>
@@ -284,7 +327,7 @@ export default function Forum() {
             ))}
           </div>
 
-          {/* REPLY BOX */}
+          {/* REPLY INPUT */}
           <div style={{ marginTop: 15 }}>
             <input
               value={replyInputs[post.id] || ""}
@@ -298,15 +341,23 @@ export default function Forum() {
               style={{
                 width: "100%",
                 padding: 8,
-                background: "#222",
-                color: "white",
-                border: "1px solid #444"
+                borderRadius: 6,
+                border: "1px solid #444",
+                background: "#111",
+                color: "white"
               }}
             />
 
             <button
               onClick={() => addReply(post)}
-              style={{ marginTop: 5 }}
+              style={{
+                marginTop: 6,
+                padding: "6px 14px",
+                borderRadius: 4,
+                background: "#3a7afe",
+                border: "none",
+                color: "white"
+              }}
             >
               Reply
             </button>

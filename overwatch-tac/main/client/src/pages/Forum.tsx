@@ -36,7 +36,10 @@ interface ForumPost {
 
 //admin list
 const ADMIN_USERS = [
-  "fXfFd71NClZdewsTF8ViDQXpYq42"
+  "fXfFd71NClZdewsTF8ViDQXpYq42",
+  "NvwzEQ1kk6h1uOU1Kt25ozDhnFT2",
+  "3qNLKWK0UfU5pPpUUYD6lTiyeI83",
+  "xoSjO0lQU7eiqnYgGON8RLgd4pt2"
 ];
 
 

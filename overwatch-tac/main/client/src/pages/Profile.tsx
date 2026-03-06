@@ -113,7 +113,7 @@ const Profile = () => {
           style={{
             padding: "8px 12px",
             borderRadius: "5px",
-            background: "green",
+            background: "#e66feaff",
             color: "white",
             border: "none",
             fontWeight: "bold",
@@ -128,7 +128,7 @@ const Profile = () => {
             style={{
               padding: "8px 12px",
               borderRadius: "5px",
-              background: "gray",
+              background: "#6c446dff",
               color: "white",
               border: "none",
               fontWeight: "bold",
@@ -146,7 +146,7 @@ const Profile = () => {
             marginTop: "15px",
             padding: "10px",
             borderRadius: "5px",
-            background: "red",
+            background: "rgba(177, 46, 103, 1)",
             color: "white",
             border: "none",
             fontWeight: "bold",

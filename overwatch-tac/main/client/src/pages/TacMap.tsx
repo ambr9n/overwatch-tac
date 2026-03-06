@@ -129,7 +129,7 @@ const TacMap: React.FC = () => {
               onClick={() => { setSelectedMode(mode); setSelectedMap(null); setMarkers([]); }}
               style={{
                 padding: "8px 12px",
-                background: selectedMode === mode ? "#00bfff" : "#444",
+                background: selectedMode === mode ? "#e60082ff" : "#444",
                 color: "white", border: "none", borderRadius: "4px", cursor: "pointer",
               }}
             >
@@ -151,7 +151,7 @@ const TacMap: React.FC = () => {
                 onClick={() => isMatch && (setSelectedMap(map.name), setMarkers([]))}
                 style={{
                   padding: "6px 10px",
-                  background: selectedMap === map.name ? "#ff8c00" : isMatch ? "#2e8b57" : "#333",
+                  background: selectedMap === map.name ? "#f65dfbff" : isMatch ? "#962b9aff" : "#333",
                   opacity: selectedMode && !isMatch ? 0.4 : 1,
                   color: "white", border: "none", borderRadius: "4px",
                   cursor: isMatch ? "pointer" : "not-allowed",

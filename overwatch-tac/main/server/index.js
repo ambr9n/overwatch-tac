@@ -7,12 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initialize Firebase Admin
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// Endpoint to get all users (UID, email, displayName)
+// !!!!IMPORTANT!!!!! YOU ADD /users to localhost:5001 to access users back end
 app.get('/users', async (req, res) => {
   try {
     const list = await admin.auth().listUsers();
@@ -21,16 +21,16 @@ app.get('/users', async (req, res) => {
       email: u.email,
       displayName: u.displayName,
     }));
-    res.json(users); // send JSON to frontend
+    res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-// Basic test route
+
 app.get('/', (req, res) => {
-  res.send('broooooo');
+  res.send('broooooo'); // basic route
 });
 
 app.listen(5001, () => {

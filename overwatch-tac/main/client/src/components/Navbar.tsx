@@ -1,18 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FC } from "react";
 import { auth } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
 import "./Navbar.css";
 
-const Navbar = () => {
+const Navbar: FC = () => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
-
     return () => unsub();
   }, []);
 
@@ -34,8 +33,22 @@ const Navbar = () => {
 
       <div className="nav-right">
         {user ? (
-          <NavLink to="/profile" className="nav-link login">
-            Profile
+          <NavLink to="/profile" className="nav-link login profile-link">
+            {user.photoURL && (
+              <img
+                src={user.photoURL}
+                alt="Profile"
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: "50%",
+                  marginRight: "8px",
+                  objectFit: "cover",
+                  verticalAlign: "middle",
+                }}
+              />
+            )}
+            {user.displayName || "Profile"}
           </NavLink>
         ) : (
           <>

@@ -1,20 +1,37 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import type { User } from "firebase/auth";
 import { auth } from "../firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, updateProfile, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 
 const Profile = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [photoURLInput, setPhotoURLInput] = useState("");
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser?.photoURL) setPhotoURL(currentUser.photoURL);
     });
-
     return () => unsubscribe();
   }, []);
+
+  const handlePhotoURLChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setPhotoURLInput(e.target.value);
+  };
+
+  const handleSavePhoto = async () => {
+    if (!user || !photoURLInput) return;
+    try {
+      await updateProfile(user, { photoURL: photoURLInput });
+      setPhotoURL(photoURLInput);
+      setPhotoURLInput("");
+    } catch (error: any) {
+      alert(error.message);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -37,23 +54,56 @@ const Profile = () => {
   return (
     <div>
       <h2>Profile</h2>
+      {photoURL && (
+        <div>
+          <img
+            src={photoURL}
+            alt="Profile"
+            style={{ width: 120, borderRadius: "50%", marginBottom: "15px" }}
+          />
+        </div>
+      )}
       <p>Username: {user.displayName}</p>
       <p>Email: {user.email}</p>
 
+      <input
+        type="text"
+        placeholder="Paste profile image URL"
+        value={photoURLInput}
+        onChange={handlePhotoURLChange}
+        style={{ padding: "5px", width: "250px", marginTop: "10px" }}
+      />
       <button
-        onClick={handleLogout}
+        onClick={handleSavePhoto}
         style={{
-          marginTop: "15px",
-          padding: "10px",
+          marginLeft: "10px",
+          padding: "8px 12px",
           borderRadius: "5px",
-          background: "red",
+          background: "green",
           color: "white",
           border: "none",
-          fontWeight: "bold"
+          fontWeight: "bold",
         }}
       >
-        Log Out
+        Save
       </button>
+
+      <div>
+        <button
+          onClick={handleLogout}
+          style={{
+            marginTop: "15px",
+            padding: "10px",
+            borderRadius: "5px",
+            background: "red",
+            color: "white",
+            border: "none",
+            fontWeight: "bold",
+          }}
+        >
+          Log Out
+        </button>
+      </div>
     </div>
   );
 };

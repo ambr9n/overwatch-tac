@@ -34,13 +34,22 @@ interface ForumPost {
   replies: Reply[];
 }
 
+//admin list
+const ADMIN_USERS = [
+  "fXfFd71NClZdewsTF8ViDQXpYq42"
+];
+
+
 export default function Forum() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [replyInputs, setReplyInputs] = useState<{ [key: string]: string }>({});
   const [showPostBox, setShowPostBox] = useState(false);
 
-  // REALTIME POSTS
+  const currentUser = auth.currentUser;
+  const isAdmin = currentUser ? ADMIN_USERS.includes(currentUser.uid) : false;
+
+  // real-time posts
   useEffect(() => {
     const q = query(collection(db, "forumPosts"), orderBy("timestamp", "desc"));
 
@@ -90,26 +99,32 @@ export default function Forum() {
   };
 
   // DELETE POST
-  const deletePost = async (postId: string) => {
+  const deletePost = async (post: ForumPost) => {
     if (!window.confirm("Delete this post?")) return;
-    await deleteDoc(doc(db, "forumPosts", postId));
+
+    if (
+      auth.currentUser?.uid === post.authorId ||
+      ADMIN_USERS.includes(auth.currentUser?.uid || "")
+    ) {
+      await deleteDoc(doc(db, "forumPosts", post.id));
+    }
   };
 
-  // LIKE
+  // like
   const likePost = async (post: ForumPost) => {
     await updateDoc(doc(db, "forumPosts", post.id), {
       likes: post.likes + 1
     });
   };
 
-  // DISLIKE
+  // dislike
   const dislikePost = async (post: ForumPost) => {
     await updateDoc(doc(db, "forumPosts", post.id), {
       dislikes: post.dislikes + 1
     });
   };
 
-  // ADD REPLY
+  // reply
   const addReply = async (post: ForumPost) => {
     if (!auth.currentUser) return;
 
@@ -133,13 +148,7 @@ export default function Forum() {
   };
 
   return (
-    <div
-      style={{
-        maxWidth: 900,
-        margin: "auto",
-        padding: 20
-      }}
-    >
+    <div style={{ maxWidth: 900, margin: "auto", padding: 20 }}>
       <h1 style={{ marginBottom: 30 }}>Forum</h1>
 
       {/* CREATE POST BUTTON */}
@@ -158,7 +167,7 @@ export default function Forum() {
         {showPostBox ? "Cancel" : "Create Post"}
       </button>
 
-      {/* POST BOX */}
+      {/* POST CREATION BOX */}
       {showPostBox && (
         <div
           style={{
@@ -169,10 +178,11 @@ export default function Forum() {
             marginBottom: 30
           }}
         >
+            {/* MESSAGE WITHIN TEXTBOX */}
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Write something..."
+            placeholder="Whats on your mind..."
             style={{
               width: "100%",
               padding: 12,
@@ -183,7 +193,7 @@ export default function Forum() {
               minHeight: 80
             }}
           />
-
+        {/* CREATE POST BUTTON (IN POST CREATION BOX) */}
           <button
             onClick={createPost}
             style={{
@@ -191,7 +201,7 @@ export default function Forum() {
               padding: "10px 18px",
               borderRadius: 6,
               border: "none",
-              background: "#3a7afe",
+              background: "#d600a1ff",
               color: "white",
               cursor: "pointer"
             }}
@@ -202,168 +212,167 @@ export default function Forum() {
       )}
 
       {/* POSTS */}
-      {posts.map((post) => (
-        <div
-          key={post.id}
-          style={{
-            border: "1px solid #2e2e2e",
-            borderRadius: 10,
-            padding: 20,
-            marginBottom: 25,
-            background: "#181818",
-            boxShadow: "0 0 10px rgba(0,0,0,0.4)"
-          }}
-        >
-          {/* AUTHOR */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Link to={`/profile/${post.authorId}`}>
-              <img
-                src={
-                  post.authorPhoto ||
-                  "https://i.imgur.com/HeIi0wU.png"
-                }
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "50%"
-                }}
-              />
-            </Link>
+      {posts.map((post) => {
+        const isOwner = auth.currentUser?.uid === post.authorId;
+        const canDelete = isOwner || isAdmin;
+        const deletingOthers = isAdmin && !isOwner;
 
-            <div>
-              <Link
-                to={`/profile/${post.authorId}`}
-                style={{
-                  color: "white",
-                  fontWeight: "bold",
-                  textDecoration: "none"
-                }}
-              >
-                {post.authorName}
+        return (
+          <div
+            key={post.id}
+            style={{
+              border: "1px solid #2e2e2e",
+              borderRadius: 10,
+              padding: 20,
+              marginBottom: 25,
+              background: "#181818",
+              boxShadow: "0 0 10px rgba(0,0,0,0.4)"
+            }}
+          >
+            {/* AUTHOR */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Link to={`/profile/${post.authorId}`}>
+                <img
+                  src={post.authorPhoto || "https://i.imgur.com/HeIi0wU.png"}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%"
+                  }}
+                />
               </Link>
 
-              <div style={{ fontSize: 12, color: "#aaa" }}>
-                {post.timestamp?.toDate
-                  ? post.timestamp.toDate().toLocaleString()
-                  : ""}
-              </div>
-            </div>
-          </div>
-
-          {/* MESSAGE */}
-          <p style={{ marginTop: 15 }}>{post.message}</p>
-
-          {/* ACTIONS */}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => likePost(post)}>👍 {post.likes}</button>
-            <button onClick={() => dislikePost(post)}>👎 {post.dislikes}</button>
-
-            {auth.currentUser?.uid === post.authorId && (
-              <button
-                onClick={() => deletePost(post.id)}
-                style={{
-                  marginLeft: 10,
-                  background: "#aa2222",
-                  color: "white",
-                  border: "none",
-                  padding: "5px 10px",
-                  borderRadius: 4,
-                  cursor: "pointer"
-                }}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-
-          {/* REPLIES */}
-          <div style={{ marginTop: 20 }}>
-            {post.replies.map((reply) => (
-              <div
-                key={reply.id}
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  marginTop: 10,
-                  padding: 10,
-                  borderLeft: "2px solid #333"
-                }}
-              >
-                <Link to={`/profile/${reply.authorId}`}>
-                  <img
-                    src={
-                      reply.authorPhoto ||
-                      "https://i.imgur.com/HeIi0wU.png"
-                    }
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: "50%"
-                    }}
-                  />
+              <div>
+                <Link
+                  to={`/profile/${post.authorId}`}
+                  style={{
+                    color: "white",
+                    fontWeight: "bold",
+                    textDecoration: "none"
+                  }}
+                >
+                  {post.authorName}
                 </Link>
 
-                <div>
-                  <Link
-                    to={`/profile/${reply.authorId}`}
-                    style={{
-                      color: "white",
-                      fontWeight: "bold",
-                      textDecoration: "none"
-                    }}
-                  >
-                    {reply.authorName}
-                  </Link>
-
-                  <div style={{ fontSize: 12, color: "#aaa" }}>
-                    {reply.timestamp
-                      ? new Date(reply.timestamp).toLocaleString()
-                      : ""}
-                  </div>
-
-                  <div>{reply.message}</div>
+                <div style={{ fontSize: 12, color: "#aaa" }}>
+                  {post.timestamp?.toDate
+                    ? post.timestamp.toDate().toLocaleString()
+                    : ""}
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* REPLY INPUT */}
-          <div style={{ marginTop: 15 }}>
-            <input
-              value={replyInputs[post.id] || ""}
-              onChange={(e) =>
-                setReplyInputs({
-                  ...replyInputs,
-                  [post.id]: e.target.value
-                })
-              }
-              placeholder="Reply..."
-              style={{
-                width: "100%",
-                padding: 8,
-                borderRadius: 6,
-                border: "1px solid #444",
-                background: "#111",
-                color: "white"
-              }}
-            />
+            <p style={{ marginTop: 15 }}>{post.message}</p>
 
-            <button
-              onClick={() => addReply(post)}
-              style={{
-                marginTop: 6,
-                padding: "6px 14px",
-                borderRadius: 4,
-                background: "#3a7afe",
-                border: "none",
-                color: "white"
-              }}
-            >
-              Reply
-            </button>
+            {/* ACTIONS */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => likePost(post)}>👍 {post.likes}</button>
+              <button onClick={() => dislikePost(post)}>👎 {post.dislikes}</button>
+
+              {canDelete && (
+                <button
+                  onClick={() => deletePost(post)}
+                  style={{
+                    marginLeft: 10,
+                    background: deletingOthers ? "#7b3fe4" : "#aa2222",
+                    color: "white",
+                    border: "none",
+                    padding: "5px 12px",
+                    borderRadius: 4,
+                    cursor: "pointer"
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+
+            {/* REPLIES */}
+            <div style={{ marginTop: 20 }}>
+              {post.replies.map((reply) => (
+                <div
+                  key={reply.id}
+                  style={{
+                    display: "flex",
+                    gap: 10,
+                    marginTop: 10,
+                    padding: 10,
+                    borderLeft: "2px solid #333"
+                  }}
+                >
+                  <Link to={`/profile/${reply.authorId}`}>
+                    <img
+                      src={reply.authorPhoto || "https://i.imgur.com/HeIi0wU.png"}
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: "50%"
+                      }}
+                    />
+                  </Link>
+
+                  <div>
+                    <Link
+                      to={`/profile/${reply.authorId}`}
+                      style={{
+                        color: "white",
+                        fontWeight: "bold",
+                        textDecoration: "none"
+                      }}
+                    >
+                      {reply.authorName}
+                    </Link>
+
+                    <div style={{ fontSize: 12, color: "#aaa" }}>
+                      {reply.timestamp
+                        ? new Date(reply.timestamp).toLocaleString()
+                        : ""}
+                    </div>
+
+                    <div>{reply.message}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* REPLY INPUT */}
+            <div style={{ marginTop: 15 }}>
+              <input
+                value={replyInputs[post.id] || ""}
+                onChange={(e) =>
+                  setReplyInputs({
+                    ...replyInputs,
+                    [post.id]: e.target.value
+                  })
+                }
+                placeholder="Reply..."
+                style={{
+                  width: "100%",
+                  padding: 8,
+                  borderRadius: 6,
+                  border: "1px solid #444",
+                  background: "#111",
+                  color: "white"
+                }}
+              />
+
+              <button
+                onClick={() => addReply(post)}
+                style={{
+                  marginTop: 6,
+                  padding: "6px 14px",
+                  borderRadius: 4,
+                  background: "#3a7afe",
+                  border: "none",
+                  color: "white"
+                }}
+              >
+                Reply
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

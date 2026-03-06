@@ -1,3 +1,4 @@
+// client/src/components/Navbar.tsx
 import { NavLink } from "react-router-dom";
 import { useState, useEffect, type FC } from "react";
 import { auth } from "../firebase";
@@ -21,23 +22,24 @@ const Navbar: FC = () => {
         <NavLink to="/" end className="nav-link">
           Home
         </NavLink>
-
         <NavLink to="/tacmap" className="nav-link">
           Tac Map
         </NavLink>
-
         <NavLink to="/saves" className="nav-link">
           Saves
+        </NavLink>
+        <NavLink to="/forum" className="nav-link">
+          Forum
         </NavLink>
       </div>
 
       <div className="nav-right">
         {user ? (
-          <NavLink to="/profile" className="nav-link login profile-link">
+          <NavLink to={`/profile/${user.uid}`} className="nav-link login profile-link">
             {user.photoURL && (
               <img
                 src={user.photoURL}
-                alt="Profile"
+                alt={user.displayName || "Profile"}
                 style={{
                   width: 30,
                   height: 30,
@@ -55,7 +57,6 @@ const Navbar: FC = () => {
             <NavLink to="/auth" className="nav-link signup">
               Sign Up
             </NavLink>
-
             <NavLink to="/login" className="nav-link login">
               Sign In
             </NavLink>

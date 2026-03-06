@@ -7,7 +7,8 @@ import {
   orderBy,
   onSnapshot,
   updateDoc,
-  doc
+  doc,
+  deleteDoc
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { Link } from "react-router-dom";
@@ -101,6 +102,14 @@ export default function Forum() {
     await updateDoc(doc(db, "forumPosts", post.id), {
       dislikes: post.dislikes + 1
     });
+  };
+
+  // DELETE POST
+  const deletePost = async (postId: string) => {
+    const confirmDelete = window.confirm("Delete this post?");
+    if (!confirmDelete) return;
+
+    await deleteDoc(doc(db, "forumPosts", postId));
   };
 
   // REPLY
@@ -203,8 +212,8 @@ export default function Forum() {
           {/* MESSAGE */}
           <p style={{ marginTop: 15 }}>{post.message}</p>
 
-          {/* LIKE DISLIKE */}
-          <div style={{ display: "flex", gap: 10 }}>
+          {/* ACTIONS */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button onClick={() => likePost(post)}>
               👍 {post.likes}
             </button>
@@ -212,6 +221,22 @@ export default function Forum() {
             <button onClick={() => dislikePost(post)}>
               👎 {post.dislikes}
             </button>
+
+            {auth.currentUser?.uid === post.authorId && (
+              <button
+                onClick={() => deletePost(post.id)}
+                style={{
+                  marginLeft: 10,
+                  background: "#aa2222",
+                  color: "white",
+                  border: "none",
+                  padding: "5px 10px",
+                  cursor: "pointer"
+                }}
+              >
+                Delete
+              </button>
+            )}
           </div>
 
           {/* REPLIES */}

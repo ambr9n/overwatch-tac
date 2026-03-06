@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { MouseEvent } from "react";
 
-// Asset Imports
+// Asset Imports (Keeping paths exactly as provided)
 import watchpoint from "/src/assets/maps/watchpoint_map.png";
 import lijiang from "/src/assets/maps/lijiang_map.png";
 import kings from "/src/assets/maps/kings_map.png";
@@ -18,6 +18,7 @@ import anubis from "/src/assets/maps/anubis_map.png";
 type Team = "ally" | "enemy";
 
 interface Marker {
+  id: number; // Added unique ID for reliable dragging
   x: number;
   y: number;
   team: Team;
@@ -53,20 +54,30 @@ const TacMap: React.FC = () => {
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
   const [selectedMap, setSelectedMap] = useState<string | null>(null);
   const [activeTeam, setActiveTeam] = useState<Team>("ally");
+  
+  // States for website notification and drag-and-drop
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
 
   const currentMap = mapList.find((m) => m.name === selectedMap);
-  
-  // Get counts for each team
   const allyCount = markers.filter(m => m.team === "ally").length;
   const enemyCount = markers.filter(m => m.team === "enemy").length;
 
-  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (!currentMap) return;
+  // Clear notification after 3 seconds
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => setErrorMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
 
-    // Enforcement: Limit to 5 per team
+  const handleMapClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!currentMap || draggingId !== null) return;
+
     const currentTeamCount = markers.filter(m => m.team === activeTeam).length;
     if (currentTeamCount >= 5) {
-      alert(`Limit reached! You can only place 5 ${activeTeam} icons.`);
+      setErrorMessage(`Limit reached! You can only place 5 ${activeTeam} icons.`);
       return;
     }
 
@@ -74,13 +85,38 @@ const TacMap: React.FC = () => {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    setMarkers([...markers, { x, y, team: activeTeam }]);
+    setMarkers([...markers, { id: Date.now(), x, y, team: activeTeam }]);
   };
 
-  const handleReset = () => setMarkers([]);
+  const startDragging = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    setDraggingId(id);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (draggingId === null || !mapRef.current) return;
+
+    const rect = mapRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setMarkers(prev => prev.map(m => m.id === draggingId ? { ...m, x, y } : m));
+  };
+
+  const stopDragging = () => setDraggingId(null);
+
+  const handleReset = () => {
+    setMarkers([]);
+    setErrorMessage(null);
+  };
 
   return (
-    <div style={{ padding: "20px", color: "white", backgroundColor: "#1a1a1a", minHeight: "100vh", fontFamily: "sans-serif" }}>
+    <div 
+      style={{ padding: "20px", color: "white", backgroundColor: "#1a1a1a", minHeight: "100vh", fontFamily: "sans-serif" }}
+      onMouseMove={handleMouseMove}
+      onMouseUp={stopDragging}
+      onMouseLeave={stopDragging}
+    >
       <h2>Overwatch Tac Map</h2>
 
       {/* Mode Selection */}
@@ -164,40 +200,59 @@ const TacMap: React.FC = () => {
       </div>
 
       {/* Tactical Map Display */}
-      <div
-        onClick={handleClick}
-        style={{
-          width: "100%", maxWidth: "1000px", height: "600px",
-          position: "relative", border: "2px solid #555",
-          cursor: currentMap ? "crosshair" : "not-allowed",
-          backgroundImage: currentMap ? `url(${currentMap.image})` : "none",
-          backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center",
-          backgroundColor: "#222", margin: "0 auto", overflow: "hidden"
-        }}
-      >
-        {markers.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              width: "20px", height: "20px",
-              background: m.team === "ally" ? "#007bff" : "#dc3545",
-              border: "2px solid white", borderRadius: "50%",
-              left: m.x - 10, top: m.y - 10,
-              pointerEvents: "none",
-              boxShadow: "0 0 10px rgba(0,0,0,0.5)",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "bold"
-            }}
-          >
-            {m.team === "ally" ? "A" : "E"}
-          </div>
-        ))}
+      <div style={{ position: "relative", maxWidth: "1000px", margin: "0 auto" }}>
         
-        {!currentMap && (
-          <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "#888" }}>
-            Select a map above to start planning
+        {/* IN-WEBSITE NOTIFICATION */}
+        {errorMessage && (
+          <div style={{
+            position: "absolute", top: "-50px", left: "50%", transform: "translateX(-50%)",
+            backgroundColor: "#dc3545", color: "white", padding: "10px 20px", borderRadius: "4px",
+            zIndex: 100, fontWeight: "bold", boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+            border: "1px solid white", pointerEvents: "none"
+          }}>
+            {errorMessage}
           </div>
         )}
+
+        <div
+          ref={mapRef}
+          onClick={handleMapClick}
+          style={{
+            width: "100%", height: "600px",
+            position: "relative", border: "2px solid #555",
+            cursor: currentMap ? (draggingId !== null ? "grabbing" : "crosshair") : "not-allowed",
+            backgroundImage: currentMap ? `url(${currentMap.image})` : "none",
+            backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center",
+            backgroundColor: "#222", overflow: "hidden"
+          }}
+        >
+          {markers.map((m) => (
+            <div
+              key={m.id}
+              onMouseDown={(e) => startDragging(e, m.id)}
+              style={{
+                position: "absolute",
+                width: "24px", height: "24px",
+                background: m.team === "ally" ? "#007bff" : "#dc3545",
+                border: "2px solid white", borderRadius: "50%",
+                left: m.x - 12, top: m.y - 12,
+                cursor: draggingId === m.id ? "grabbing" : "grab",
+                boxShadow: "0 0 10px rgba(0,0,0,0.5)",
+                display: "flex", alignItems: "center", justifyContent: "center", 
+                fontSize: "12px", fontWeight: "bold", userSelect: "none",
+                zIndex: draggingId === m.id ? 10 : 5
+              }}
+            >
+              {m.team === "ally" ? "A" : "E"}
+            </div>
+          ))}
+          
+          {!currentMap && (
+            <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "#888" }}>
+              Select a map above to start planning
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

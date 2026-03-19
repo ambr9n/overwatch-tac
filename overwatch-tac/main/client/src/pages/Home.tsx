@@ -16,7 +16,7 @@ const Home = () => {
         </p>
 
         <div className="hero-buttons">
-          <Link to="/auth" className="primary-btn">
+          <Link to="/tacmap" className="primary-btn">
             Get Started
           </Link>
         </div>

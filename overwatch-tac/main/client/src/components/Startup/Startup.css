@@ -1,0 +1,43 @@
+.startup {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #140a2a, #0f051f);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 1s ease forwards;
+}
+
+.startup-logo {
+  font-size: 60px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 2px;
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+.startup-logo span {
+  background: linear-gradient(90deg, #a855f7, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Fade out */
+.fade-out {
+  animation: fadeOut 0.8s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; }
+}
+
+@keyframes glow {
+  from { text-shadow: 0 0 10px #9333ea; }
+  to { text-shadow: 0 0 25px #ec4899; }
+}

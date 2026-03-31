@@ -1,21 +1,43 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import type { User } from "firebase/auth";
-import { auth } from "../firebase";
-import { onAuthStateChanged, updateProfile, signOut } from "firebase/auth";
+import { supabase } from "../Supabase";
 import { useNavigate } from "react-router-dom";
 
+interface SupabaseUser {
+  id: string;
+  email: string | null;
+  user_metadata: { username?: string; photoURL?: string };
+}
+
 const Profile = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [photoURLInput, setPhotoURLInput] = useState("");
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser?.photoURL) setPhotoURL(currentUser.photoURL);
+    const sessionUser = supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUser(user as SupabaseUser);
+        setPhotoURL(user.user_metadata?.photoURL || null);
+      }
     });
-    return () => unsubscribe();
+
+    // Optional: Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.user) {
+          setUser(session.user as SupabaseUser);
+          setPhotoURL(session.user.user_metadata?.photoURL || null);
+        } else {
+          setUser(null);
+          setPhotoURL(null);
+        }
+      }
+    );
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
   const handlePhotoURLChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -25,7 +47,11 @@ const Profile = () => {
   const handleSavePhoto = async () => {
     if (!user || !photoURLInput) return;
     try {
-      await updateProfile(user, { photoURL: photoURLInput });
+      // Update user metadata
+      const { error } = await supabase.auth.updateUser({
+        data: { ...user.user_metadata, photoURL: photoURLInput },
+      });
+      if (error) throw error;
       setPhotoURL(photoURLInput);
       setPhotoURLInput("");
     } catch (error: any) {
@@ -36,7 +62,10 @@ const Profile = () => {
   const handleRemovePhoto = async () => {
     if (!user) return;
     try {
-      await updateProfile(user, { photoURL: null });
+      const { error } = await supabase.auth.updateUser({
+        data: { ...user.user_metadata, photoURL: null },
+      });
+      if (error) throw error;
       setPhotoURL(null);
     } catch (error: any) {
       alert(error.message);
@@ -45,7 +74,8 @@ const Profile = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       navigate("/login");
     } catch (error: any) {
       alert(error.message);
@@ -95,7 +125,7 @@ const Profile = () => {
         </div>
       )}
 
-      <p style={{ marginBottom: "10px" }}>Username: {user.displayName}</p>
+      <p style={{ marginBottom: "10px" }}>Username: {user.user_metadata?.username}</p>
       <p style={{ marginBottom: "10px" }}>Email: {user.email}</p>
 
       <h3 style={{ marginTop: "20px" }}>Profile Image</h3>

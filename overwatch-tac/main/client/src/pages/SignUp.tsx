@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth } from "../firebase";
+import { supabase } from "../Supabase";
 import { useNavigate } from "react-router-dom";
 
 const SignUp: React.FC = () => {
@@ -11,15 +10,20 @@ const SignUp: React.FC = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+
     try {
-      // Create user with email/password
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Sign up with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { username }, // store extra info
+        },
+      });
 
-      // Update displayName with username
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { displayName: username });
-      }
+      if (error) throw error;
 
+      alert("Signup successful! Check your email for confirmation.");
       navigate("/"); // redirect after signup
     } catch (error: any) {
       alert(error.message);

@@ -9,6 +9,7 @@
     "start": "concurrently \"npm run server\" \"npm run client\""
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
     "ansi-regex": "^5.0.1",
     "ansi-styles": "^4.3.0",
     "chalk": "^4.1.2",

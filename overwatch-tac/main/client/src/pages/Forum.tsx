@@ -1,40 +1,30 @@
 import { useEffect, useState } from "react";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  query,
-  orderBy,
-  onSnapshot,
-  updateDoc,
-  doc,
-  deleteDoc
-} from "firebase/firestore";
-import { db, auth } from "../firebase";
+import type { ChangeEvent } from "react"; // type-only import
+import { supabase } from "../Supabase";
 import { Link } from "react-router-dom";
 
 interface Reply {
   id: string;
-  authorId: string;
-  authorName: string;
-  authorPhoto: string | null;
+  author_id: string;
+  author_name: string;
+  author_photo: string | null;
   message: string;
-  timestamp: any;
+  timestamp: string;
 }
 
 interface ForumPost {
   id: string;
-  authorId: string;
-  authorName: string;
-  authorPhoto: string | null;
+  author_id: string;
+  author_name: string;
+  author_photo: string | null;
   message: string;
-  timestamp: any;
+  timestamp: string;
   likes: number;
   dislikes: number;
   replies: Reply[];
 }
 
-//admin list
+// Admin user IDs
 const ADMIN_USERS = [
   "fXfFd71NClZdewsTF8ViDQXpYq42",
   "NvwzEQ1kk6h1uOU1Kt25ozDhnFT2",
@@ -42,61 +32,72 @@ const ADMIN_USERS = [
   "xoSjO0lQU7eiqnYgGON8RLgd4pt2"
 ];
 
-
 export default function Forum() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [replyInputs, setReplyInputs] = useState<{ [key: string]: string }>({});
   const [showPostBox, setShowPostBox] = useState(false);
 
-  const currentUser = auth.currentUser;
-  const isAdmin = currentUser ? ADMIN_USERS.includes(currentUser.uid) : false;
+  const [currentUser, setCurrentUser] = useState<any>(null); // Supabase user
 
-  // real-time posts
+  // Load current user
   useEffect(() => {
-    const q = query(collection(db, "forumPosts"), orderBy("timestamp", "desc"));
+    const fetchUser = async () => {
+      const { data: user } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    };
+    fetchUser();
+  }, []);
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const loadedPosts: ForumPost[] = snapshot.docs.map((docSnap) => {
-        const data: any = docSnap.data();
+  // Load posts & subscribe to real-time changes
+  useEffect(() => {
+    const fetchPosts = async () => {
+      const { data, error } = await supabase
+        .from("forumPosts")
+        .select("*")
+        .order("timestamp", { ascending: false });
 
-        return {
-          id: docSnap.id,
-          authorId: data.authorId,
-          authorName: data.authorName,
-          authorPhoto: data.authorPhoto || null,
-          message: data.message,
-          timestamp:
-            data.timestamp ||
-            { toDate: () => data.clientTimestamp || new Date() },
-          likes: data.likes || 0,
-          dislikes: data.dislikes || 0,
-          replies: data.replies || []
-        };
-      });
+      if (error) console.error(error);
+      else setPosts(data || []);
+    };
 
-      setPosts(loadedPosts);
-    });
+    fetchPosts();
 
-    return () => unsub();
+    // Real-time subscription
+    const postSub = supabase
+      .channel("public:forumPosts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "forumPosts" },
+        () => {
+          fetchPosts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(postSub);
+    };
   }, []);
 
   // CREATE POST
   const createPost = async () => {
-    if (!auth.currentUser || !newMessage.trim()) return;
+    if (!currentUser || !newMessage.trim()) return;
 
-    await addDoc(collection(db, "forumPosts"), {
-      authorId: auth.currentUser.uid,
-      authorName: auth.currentUser.displayName || "Anonymous",
-      authorPhoto: auth.currentUser.photoURL || null,
-      message: newMessage,
-      timestamp: serverTimestamp(),
-      clientTimestamp: new Date(),
-      likes: 0,
-      dislikes: 0,
-      replies: []
-    });
+    const { error } = await supabase.from("forumPosts").insert([
+      {
+        author_id: currentUser.id,
+        author_name: currentUser.user_metadata.username || "Anonymous",
+        author_photo: currentUser.user_metadata.photoURL || null,
+        message: newMessage,
+        timestamp: new Date().toISOString(),
+        likes: 0,
+        dislikes: 0,
+        replies: []
+      }
+    ]);
 
+    if (error) console.error(error);
     setNewMessage("");
     setShowPostBox(false);
   };
@@ -104,48 +105,55 @@ export default function Forum() {
   // DELETE POST
   const deletePost = async (post: ForumPost) => {
     if (!window.confirm("Delete this post?")) return;
+    if (!currentUser) return;
 
-    if (
-      auth.currentUser?.uid === post.authorId ||
-      ADMIN_USERS.includes(auth.currentUser?.uid || "")
-    ) {
-      await deleteDoc(doc(db, "forumPosts", post.id));
+    if (post.author_id === currentUser.id || ADMIN_USERS.includes(currentUser.id)) {
+      const { error } = await supabase
+        .from("forumPosts")
+        .delete()
+        .eq("id", post.id);
+
+      if (error) console.error(error);
     }
   };
 
-  // like
+  // LIKE / DISLIKE
   const likePost = async (post: ForumPost) => {
-    await updateDoc(doc(db, "forumPosts", post.id), {
-      likes: post.likes + 1
-    });
+    await supabase
+      .from("forumPosts")
+      .update({ likes: post.likes + 1 })
+      .eq("id", post.id);
   };
 
-  // dislike
   const dislikePost = async (post: ForumPost) => {
-    await updateDoc(doc(db, "forumPosts", post.id), {
-      dislikes: post.dislikes + 1
-    });
+    await supabase
+      .from("forumPosts")
+      .update({ dislikes: post.dislikes + 1 })
+      .eq("id", post.id);
   };
 
-  // reply
+  // ADD REPLY
   const addReply = async (post: ForumPost) => {
-    if (!auth.currentUser) return;
+    if (!currentUser) return;
 
     const replyText = replyInputs[post.id];
     if (!replyText?.trim()) return;
 
     const newReply: Reply = {
       id: crypto.randomUUID(),
-      authorId: auth.currentUser.uid,
-      authorName: auth.currentUser.displayName || "Anonymous",
-      authorPhoto: auth.currentUser.photoURL || null,
+      author_id: currentUser.id,
+      author_name: currentUser.user_metadata.username || "Anonymous",
+      author_photo: currentUser.user_metadata.photoURL || null,
       message: replyText,
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     };
 
-    await updateDoc(doc(db, "forumPosts", post.id), {
-      replies: [...post.replies, newReply]
-    });
+    const { error } = await supabase
+      .from("forumPosts")
+      .update({ replies: [...post.replies, newReply] })
+      .eq("id", post.id);
+
+    if (error) console.error(error);
 
     setReplyInputs({ ...replyInputs, [post.id]: "" });
   };
@@ -181,11 +189,10 @@ export default function Forum() {
             marginBottom: 30
           }}
         >
-            {/* MESSAGE WITHIN TEXTBOX */}
           <textarea
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Whats on your mind..."
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.currentTarget.value)}
+            placeholder="What's on your mind..."
             style={{
               width: "100%",
               padding: 12,
@@ -196,7 +203,6 @@ export default function Forum() {
               minHeight: 80
             }}
           />
-        {/* CREATE POST BUTTON (IN POST CREATION BOX) */}
           <button
             onClick={createPost}
             style={{
@@ -216,9 +222,7 @@ export default function Forum() {
 
       {/* POSTS */}
       {posts.map((post) => {
-        const isOwner = auth.currentUser?.uid === post.authorId;
-        const canDelete = isOwner || isAdmin;
-        const deletingOthers = isAdmin && !isOwner;
+        const canDelete = currentUser && (post.author_id === currentUser.id || ADMIN_USERS.includes(currentUser.id));
 
         return (
           <div
@@ -232,42 +236,28 @@ export default function Forum() {
               boxShadow: "0 0 10px rgba(0,0,0,0.4)"
             }}
           >
-            {/* AUTHOR */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Link to={`/profile/${post.authorId}`}>
+              <Link to={`/profile/${post.author_id}`}>
                 <img
-                  src={post.authorPhoto || "https://i.imgur.com/HeIi0wU.png"}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "50%"
-                  }}
+                  src={post.author_photo || "https://i.imgur.com/HeIi0wU.png"}
+                  style={{ width: 40, height: 40, borderRadius: "50%" }}
                 />
               </Link>
-
               <div>
                 <Link
-                  to={`/profile/${post.authorId}`}
-                  style={{
-                    color: "white",
-                    fontWeight: "bold",
-                    textDecoration: "none"
-                  }}
+                  to={`/profile/${post.author_id}`}
+                  style={{ color: "white", fontWeight: "bold", textDecoration: "none" }}
                 >
-                  {post.authorName}
+                  {post.author_name}
                 </Link>
-
                 <div style={{ fontSize: 12, color: "#aaa" }}>
-                  {post.timestamp?.toDate
-                    ? post.timestamp.toDate().toLocaleString()
-                    : ""}
+                  {new Date(post.timestamp).toLocaleString()}
                 </div>
               </div>
             </div>
 
             <p style={{ marginTop: 15 }}>{post.message}</p>
 
-            {/* ACTIONS */}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => likePost(post)}>👍 {post.likes}</button>
               <button onClick={() => dislikePost(post)}>👎 {post.dislikes}</button>
@@ -277,7 +267,7 @@ export default function Forum() {
                   onClick={() => deletePost(post)}
                   style={{
                     marginLeft: 10,
-                    background: deletingOthers ? "#7b3fe4" : "#aa2222",
+                    background: "#aa2222",
                     color: "white",
                     border: "none",
                     padding: "5px 12px",
@@ -303,35 +293,22 @@ export default function Forum() {
                     borderLeft: "2px solid #333"
                   }}
                 >
-                  <Link to={`/profile/${reply.authorId}`}>
+                  <Link to={`/profile/${reply.author_id}`}>
                     <img
-                      src={reply.authorPhoto || "https://i.imgur.com/HeIi0wU.png"}
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: "50%"
-                      }}
+                      src={reply.author_photo || "https://i.imgur.com/HeIi0wU.png"}
+                      style={{ width: 30, height: 30, borderRadius: "50%" }}
                     />
                   </Link>
-
                   <div>
                     <Link
-                      to={`/profile/${reply.authorId}`}
-                      style={{
-                        color: "white",
-                        fontWeight: "bold",
-                        textDecoration: "none"
-                      }}
+                      to={`/profile/${reply.author_id}`}
+                      style={{ color: "white", fontWeight: "bold", textDecoration: "none" }}
                     >
-                      {reply.authorName}
+                      {reply.author_name}
                     </Link>
-
                     <div style={{ fontSize: 12, color: "#aaa" }}>
-                      {reply.timestamp
-                        ? new Date(reply.timestamp).toLocaleString()
-                        : ""}
+                      {new Date(reply.timestamp).toLocaleString()}
                     </div>
-
                     <div>{reply.message}</div>
                   </div>
                 </div>
@@ -342,11 +319,8 @@ export default function Forum() {
             <div style={{ marginTop: 15 }}>
               <input
                 value={replyInputs[post.id] || ""}
-                onChange={(e) =>
-                  setReplyInputs({
-                    ...replyInputs,
-                    [post.id]: e.target.value
-                  })
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setReplyInputs({ ...replyInputs, [post.id]: e.currentTarget.value })
                 }
                 placeholder="Reply..."
                 style={{
@@ -358,7 +332,6 @@ export default function Forum() {
                   color: "white"
                 }}
               />
-
               <button
                 onClick={() => addReply(post)}
                 style={{

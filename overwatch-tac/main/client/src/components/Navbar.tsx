@@ -1,19 +1,27 @@
 // client/src/components/Navbar.tsx
 import { NavLink } from "react-router-dom";
 import { useState, useEffect, type FC } from "react";
-import { auth } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import type { User } from "firebase/auth";
+import { supabase } from "../Supabase";
 import "./Navbar.css";
 
 const Navbar: FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // Get current user on mount
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUser(user);
+    };
+    fetchUser();
+
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) setUser(session.user);
+      else setUser(null);
     });
-    return () => unsub();
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   return (
@@ -35,22 +43,22 @@ const Navbar: FC = () => {
 
       <div className="nav-right">
         {user ? (
-          <NavLink to={`/profile/${user.uid}`} className="nav-link login profile-link">
-            {user.photoURL && (
+          <NavLink to={`/profile/${user.id}`} className="nav-link login profile-link">
+            {user.user_metadata.photoURL && (
               <img
-                src={user.photoURL}
-                alt={user.displayName || "Profile"}
+                src={user.user_metadata.photoURL}
+                alt={user.user_metadata.username || "Profile"}
                 style={{
                   width: 30,
                   height: 30,
                   borderRadius: "50%",
-                  marginRight: "8px",
+                  marginRight: 8,
                   objectFit: "cover",
                   verticalAlign: "middle",
                 }}
               />
             )}
-            {user.displayName || "Profile"}
+            {user.user_metadata.username || "Profile"}
           </NavLink>
         ) : (
           <>

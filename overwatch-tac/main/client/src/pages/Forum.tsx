@@ -1,350 +1,200 @@
-import { useEffect, useState } from "react";
-import type { ChangeEvent } from "react"; // type-only import
-import { supabase } from "../Supabase";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../Supabase';
 
-interface Reply {
-  id: string;
-  author_id: string;
-  author_name: string;
-  author_photo: string | null;
-  message: string;
-  timestamp: string;
+// --- 1. TYPES & INTERFACES ---
+interface ForumReply {
+  reply_id: string;
+  post_id: string;
+  user_id: string;
+  text: string;
+  created_at: string;
+  Users: { username: string; profile_image_link: string; };
+  Reply_Likes: { user_id: string }[]; // Changed from 'count' to 'user_id' for checking
 }
 
 interface ForumPost {
-  id: string;
-  author_id: string;
-  author_name: string;
-  author_photo: string | null;
-  message: string;
-  timestamp: string;
-  likes: number;
-  dislikes: number;
-  replies: Reply[];
+  post_id: string;
+  user_id: string;
+  text: string;
+  created_at: string;
+  Users: { username: string; profile_image_link: string; };
+  Post_Likes: { user_id: string }[]; // Changed from 'count' to 'user_id' for checking
+  Forum_Replies: ForumReply[];
 }
 
-// Admin user IDs
-const ADMIN_USERS = [
-  "fXfFd71NClZdewsTF8ViDQXpYq42",
-  "NvwzEQ1kk6h1uOU1Kt25ozDhnFT2",
-  "3qNLKWK0UfU5pPpUUYD6lTiyeI83",
-  "xoSjO0lQU7eiqnYgGON8RLgd4pt2"
-];
+const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31"];
 
-export default function Forum() {
+export default function Forum({ currentUser }: { currentUser: any }) {
   const [posts, setPosts] = useState<ForumPost[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [replyInputs, setReplyInputs] = useState<{ [key: string]: string }>({});
-  const [showPostBox, setShowPostBox] = useState(false);
+  const [newPostText, setNewPostText] = useState("");
+  const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
 
-  const [currentUser, setCurrentUser] = useState<any>(null); // Supabase user
+  const fetchPosts = async () => {
+    const { data, error } = await supabase
+      .from("Forum_Posts")
+      .select(`
+        post_id, user_id, text, created_at,
+        Users (username, profile_image_link),
+        Post_Likes (user_id), 
+        Forum_Replies (
+          reply_id, user_id, text, created_at,
+          Users (username, profile_image_link),
+          Reply_Likes (user_id)
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-  // Load current user
+    if (error) console.error("Fetch error:", error.message);
+    else setPosts((data as any) || []);
+  };
+
   useEffect(() => {
-    const fetchUser = async () => {
-      const { data: user } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    };
-    fetchUser();
-  }, []);
-
-  // Load posts & subscribe to real-time changes
-  useEffect(() => {
-    const fetchPosts = async () => {
-      const { data, error } = await supabase
-        .from("forumPosts")
-        .select("*")
-        .order("timestamp", { ascending: false });
-
-      if (error) console.error(error);
-      else setPosts(data || []);
-    };
-
     fetchPosts();
-
-    // Real-time subscription
-    const postSub = supabase
-      .channel("public:forumPosts")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "forumPosts" },
-        () => {
-          fetchPosts();
-        }
-      )
+    const channel = supabase.channel('forum_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Forum_Posts' }, () => fetchPosts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Forum_Replies' }, () => fetchPosts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Post_Likes' }, () => fetchPosts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Reply_Likes' }, () => fetchPosts())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(postSub);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // CREATE POST
-  const createPost = async () => {
-    if (!currentUser || !newMessage.trim()) return;
-
-    const { error } = await supabase.from("forumPosts").insert([
-      {
-        author_id: currentUser.id,
-        author_name: currentUser.user_metadata.username || "Anonymous",
-        author_photo: currentUser.user_metadata.photoURL || null,
-        message: newMessage,
-        timestamp: new Date().toISOString(),
-        likes: 0,
-        dislikes: 0,
-        replies: []
-      }
-    ]);
-
-    if (error) console.error(error);
-    setNewMessage("");
-    setShowPostBox(false);
+  // --- ACTIONS ---
+  const handleLike = async (postId: string) => {
+    if (!currentUser) return alert("Log in to like!");
+    const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
+    if (existing) await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
+    else await supabase.from("Post_Likes").insert([{ post_id: postId, user_id: currentUser.id }]);
+    fetchPosts();
   };
 
-  // DELETE POST
-  const deletePost = async (post: ForumPost) => {
-    if (!window.confirm("Delete this post?")) return;
+  const handleReplyLike = async (replyId: string) => {
     if (!currentUser) return;
-
-    if (post.author_id === currentUser.id || ADMIN_USERS.includes(currentUser.id)) {
-      const { error } = await supabase
-        .from("forumPosts")
-        .delete()
-        .eq("id", post.id);
-
-      if (error) console.error(error);
-    }
+    const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
+    if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
+    else await supabase.from("Reply_Likes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
+    fetchPosts();
   };
 
-  // LIKE / DISLIKE
-  const likePost = async (post: ForumPost) => {
-    await supabase
-      .from("forumPosts")
-      .update({ likes: post.likes + 1 })
-      .eq("id", post.id);
-  };
-
-  const dislikePost = async (post: ForumPost) => {
-    await supabase
-      .from("forumPosts")
-      .update({ dislikes: post.dislikes + 1 })
-      .eq("id", post.id);
-  };
-
-  // ADD REPLY
-  const addReply = async (post: ForumPost) => {
-    if (!currentUser) return;
-
-    const replyText = replyInputs[post.id];
-    if (!replyText?.trim()) return;
-
-    const newReply: Reply = {
-      id: crypto.randomUUID(),
-      author_id: currentUser.id,
-      author_name: currentUser.user_metadata.username || "Anonymous",
-      author_photo: currentUser.user_metadata.photoURL || null,
-      message: replyText,
-      timestamp: new Date().toISOString()
-    };
-
-    const { error } = await supabase
-      .from("forumPosts")
-      .update({ replies: [...post.replies, newReply] })
-      .eq("id", post.id);
-
-    if (error) console.error(error);
-
-    setReplyInputs({ ...replyInputs, [post.id]: "" });
+  const handleReply = async (postId: string) => {
+    const text = replyText[postId];
+    if (!text?.trim() || !currentUser) return;
+    const { error } = await supabase.from("Forum_Replies").insert([{ post_id: postId, user_id: currentUser.id, text: text.trim() }]);
+    if (!error) { setReplyText(prev => ({ ...prev, [postId]: "" })); fetchPosts(); }
   };
 
   return (
-    <div style={{ maxWidth: 900, margin: "auto", padding: 20 }}>
-      <h1 style={{ marginBottom: 30 }}>Forum</h1>
+    <div style={{ maxWidth: 800, margin: "0 auto", padding: "20px", color: "white" }}>
+      <h2>Forum</h2>
+      
+      <div style={{ marginBottom: 40, display: "flex", gap: 10 }}>
+        <input 
+          value={newPostText} 
+          onChange={(e) => setNewPostText(e.target.value)}
+          placeholder="What's on your mind?"
+          style={{ flex: 1, padding: 12, borderRadius: 8, background: "#111", border: "1px solid #333", color: "white" }}
+        />
+        <button onClick={() => {
+            if (!newPostText.trim() || !currentUser) return;
+            supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();});
+        }} style={{ padding: "10px 20px", borderRadius: 8, background: "#3b82f6", color: "white", border: "none", cursor: "pointer" }}>Post</button>
+      </div>
 
-      {/* CREATE POST BUTTON */}
-      <button
-        onClick={() => setShowPostBox(!showPostBox)}
-        style={{
-          padding: "10px 20px",
-          borderRadius: 6,
-          border: "1px solid #444",
-          background: "#222",
-          color: "white",
-          cursor: "pointer",
-          marginBottom: 20
-        }}
-      >
-        {showPostBox ? "Cancel" : "Create Post"}
-      </button>
-
-      {/* POST CREATION BOX */}
-      {showPostBox && (
-        <div
-          style={{
-            border: "1px solid #333",
-            padding: 20,
-            borderRadius: 8,
-            background: "#1b1b1b",
-            marginBottom: 30
-          }}
-        >
-          <textarea
-            value={newMessage}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setNewMessage(e.currentTarget.value)}
-            placeholder="What's on your mind..."
-            style={{
-              width: "100%",
-              padding: 12,
-              borderRadius: 6,
-              border: "1px solid #444",
-              background: "#111",
-              color: "white",
-              minHeight: 80
-            }}
-          />
-          <button
-            onClick={createPost}
-            style={{
-              marginTop: 10,
-              padding: "10px 18px",
-              borderRadius: 6,
-              border: "none",
-              background: "#d600a1ff",
-              color: "white",
-              cursor: "pointer"
-            }}
-          >
-            Post
-          </button>
-        </div>
-      )}
-
-      {/* POSTS */}
       {posts.map((post) => {
-        const canDelete = currentUser && (post.author_id === currentUser.id || ADMIN_USERS.includes(currentUser.id));
+        // CHECK IF USER LIKED POST
+        const isPostLiked = post.Post_Likes?.some(l => l.user_id === currentUser?.id);
 
         return (
-          <div
-            key={post.id}
-            style={{
-              border: "1px solid #2e2e2e",
-              borderRadius: 10,
-              padding: 20,
-              marginBottom: 25,
-              background: "#181818",
-              boxShadow: "0 0 10px rgba(0,0,0,0.4)"
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Link to={`/profile/${post.author_id}`}>
-                <img
-                  src={post.author_photo || "https://i.imgur.com/HeIi0wU.png"}
-                  style={{ width: 40, height: 40, borderRadius: "50%" }}
-                />
-              </Link>
+          <div key={post.post_id} style={{ background: "#111", padding: 24, borderRadius: 12, border: "1px solid #2e2e2e", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <img src={post.Users?.profile_image_link || "https://i.imgur.com/HeIi0wU.png"} style={{ width: 45, height: 45, borderRadius: "50%" }} />
               <div>
-                <Link
-                  to={`/profile/${post.author_id}`}
-                  style={{ color: "white", fontWeight: "bold", textDecoration: "none" }}
-                >
-                  {post.author_name}
-                </Link>
-                <div style={{ fontSize: 12, color: "#aaa" }}>
-                  {new Date(post.timestamp).toLocaleString()}
-                </div>
+                <div style={{ fontWeight: "bold" }}>{post.Users?.username || "Anonymous"}</div>
+                <div style={{ fontSize: 12, color: "#666" }}>{new Date(post.created_at).toLocaleString()}</div>
               </div>
             </div>
 
-            <p style={{ marginTop: 15 }}>{post.message}</p>
+            <p style={{ margin: "20px 0", fontSize: '1.1rem', color: '#eee' }}>{post.text}</p>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => likePost(post)}>👍 {post.likes}</button>
-              <button onClick={() => dislikePost(post)}>👎 {post.dislikes}</button>
-
-              {canDelete && (
-                <button
-                  onClick={() => deletePost(post)}
-                  style={{
-                    marginLeft: 10,
-                    background: "#aa2222",
-                    color: "white",
-                    border: "none",
-                    padding: "5px 12px",
-                    borderRadius: 4,
-                    cursor: "pointer"
-                  }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-
-            {/* REPLIES */}
-            <div style={{ marginTop: 20 }}>
-              {post.replies.map((reply) => (
-                <div
-                  key={reply.id}
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    marginTop: 10,
-                    padding: 10,
-                    borderLeft: "2px solid #333"
-                  }}
-                >
-                  <Link to={`/profile/${reply.author_id}`}>
-                    <img
-                      src={reply.author_photo || "https://i.imgur.com/HeIi0wU.png"}
-                      style={{ width: 30, height: 30, borderRadius: "50%" }}
-                    />
-                  </Link>
-                  <div>
-                    <Link
-                      to={`/profile/${reply.author_id}`}
-                      style={{ color: "white", fontWeight: "bold", textDecoration: "none" }}
-                    >
-                      {reply.author_name}
-                    </Link>
-                    <div style={{ fontSize: 12, color: "#aaa" }}>
-                      {new Date(reply.timestamp).toLocaleString()}
-                    </div>
-                    <div>{reply.message}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* REPLY INPUT */}
-            <div style={{ marginTop: 15 }}>
-              <input
-                value={replyInputs[post.id] || ""}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setReplyInputs({ ...replyInputs, [post.id]: e.currentTarget.value })
-                }
-                placeholder="Reply..."
-                style={{
-                  width: "100%",
-                  padding: 8,
-                  borderRadius: 6,
-                  border: "1px solid #444",
-                  background: "#111",
-                  color: "white"
-                }}
-              />
-              <button
-                onClick={() => addReply(post)}
-                style={{
-                  marginTop: 6,
-                  padding: "6px 14px",
-                  borderRadius: 4,
-                  background: "#3a7afe",
-                  border: "none",
-                  color: "white"
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              <button 
+                onClick={() => handleLike(post.post_id)} 
+                style={{ 
+                  background: isPostLiked ? "#444" : "#222", // LIGHTER BACKGROUND IF LIKED
+                  border: isPostLiked ? "1px solid #3b82f6" : "1px solid #333", // BLUE BORDER IF LIKED
+                  color: "white", padding: "5px 12px", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" 
                 }}
               >
-                Reply
+                👍 {post.Post_Likes?.length || 0}
               </button>
+            </div>
+
+            <div style={{ borderTop: "1px solid #222", paddingTop: 20 }}>
+              {post.Forum_Replies?.map((reply) => {
+                  const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser?.id);
+
+                  return (
+                    <div key={reply.reply_id} style={{ display: "flex", gap: 12, marginBottom: 15, paddingLeft: 10 }}>
+                      {/* Reply Avatar */}
+                      <img 
+                        src={reply.Users?.profile_image_link || "https://i.imgur.com/HeIi0wU.png"} 
+                        style={{ width: 35, height: 35, borderRadius: "50%" }} 
+                      />
+                      
+                      <div style={{ flex: 1 }}>
+                        {/* Reply Bubble */}
+                        <div style={{ background: '#181818', padding: '12px 16px', borderRadius: '12px' }}>
+                          {/* Header matching Main Post style */}
+                          <div style={{ marginBottom: 4 }}>
+                            <div style={{ fontWeight: "bold", fontSize: 13, color: '#eee' }}>
+                              {reply.Users?.username || "Anonymous"}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#666" }}>
+                              {new Date(reply.created_at).toLocaleString()}
+                            </div>
+                          </div>
+                          
+                          {/* Content */}
+                          <div style={{ fontSize: 14, color: '#ccc', marginTop: 8 }}>
+                            {reply.text}
+                          </div>
+                        </div>
+                        
+                        {/* Unified Like Button */}
+                        <button 
+                          onClick={() => handleReplyLike(reply.reply_id)}
+                          style={{ 
+                            background: isReplyLiked ? "#444" : "#222", 
+                            border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", 
+                            color: "white", 
+                            padding: "5px 12px", 
+                            borderRadius: 6, 
+                            cursor: "pointer", 
+                            fontSize: "0.85rem", 
+                            display: "flex", 
+                            alignItems: "center", 
+                            gap: 5, 
+                            marginTop: 8,
+                            transition: "all 0.2s" 
+                          }}
+                        >
+                          <span>👍</span> 
+                          <span>{reply.Reply_Likes?.length || 0}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <input
+                  type="text" placeholder="Write a reply..."
+                  value={replyText[post.post_id] || ""}
+                  onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })}
+                  style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid #333", background: "#050505", color: "white" }}
+                />
+                <button onClick={() => handleReply(post.post_id)} style={{ background: "#3b82f6", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", cursor: "pointer" }}>Reply</button>
+              </div>
             </div>
           </div>
         );

@@ -25,7 +25,7 @@ interface ForumPost {
 }
 
 // MOD LIST
-const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31"];
+const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31", "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae"];
 
 export default function Forum({ currentUser }: { currentUser: any }) {
   const [posts, setPosts] = useState<ForumPost[]>([]);

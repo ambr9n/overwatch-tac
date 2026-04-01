@@ -136,7 +136,25 @@ export default function Forum({ currentUser }: { currentUser: any }) {
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {showDelete && <button onClick={onDelete} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 16 }}>🗑️</button>}
+        {showDelete && (
+          <button 
+            onClick={onDelete} 
+            style={{ 
+              background: "#1a1a1a", 
+              border: "1px solid #333", 
+              color: "white", 
+              padding: "6px 10px", 
+              borderRadius: 8, 
+              cursor: "pointer", 
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            🗑️
+          </button>
+        )}
       </div>
     );
   };

@@ -55,6 +55,29 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   };
 
   useEffect(() => {
+    const syncProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from("Users")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (!profile && !error) {
+          await supabase.from("Users").insert([
+            {
+              user_id: user.id,
+              username: user.user_metadata.username || "User_" + user.id.slice(0, 5),
+              email: user.email,
+              profile_image_link: "https://i.imgur.com/HeIi0wU.png"
+            }
+          ]);
+          fetchPosts();
+        }
+      }
+    };
+    syncProfile();
     fetchPosts();
   }, []);
 
@@ -101,7 +124,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <div style={{ marginLeft: depth > 0 ? 20 : 0, borderLeft: depth > 0 ? "2px solid #222" : "none", paddingLeft: depth > 0 ? 15 : 0 }}>
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser?.id);
-          // Mod or Owner can delete
           const canDeleteReply = !reply.is_deleted && (isMod || currentUser?.id === reply.user_id);
 
           return (
@@ -152,7 +174,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       {posts.map((post) => {
         const replyCount = post.Forum_Replies?.filter(r => !r.is_deleted).length || 0;
         const isExpanded = expandedPosts[post.post_id];
-        // Mod or Owner can delete
         const canDeletePost = !post.is_deleted && (isMod || currentUser?.id === post.user_id);
 
         return (

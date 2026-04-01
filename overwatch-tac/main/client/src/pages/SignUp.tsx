@@ -12,36 +12,45 @@ const SignUp: React.FC = () => {
     e.preventDefault();
 
     try {
+      // 1. STRICT EMAIL & USERNAME CHECK
+      // We check our 'Users' table to see if this email is already "active"
       const { data: existingUser } = await supabase
         .from("Users")
-        .select("username, email")
-        .or(`username.ilike.${username},email.eq.${email}`) 
+        .select("email, username")
+        .or(`email.eq.${email.toLowerCase()},username.ilike.${username}`)
         .maybeSingle();
 
       if (existingUser) {
-        if (existingUser.username.toLowerCase() === username.toLowerCase()) {
-          alert("That username is already taken.");
+        if (existingUser.email.toLowerCase() === email.toLowerCase()) {
+          alert("This email is already registered. Try logging in or resetting your password.");
         } else {
-          alert("This email is already registered. Try logging in instead!");
+          alert("That username is already taken.");
         }
         return;
       }
 
+      // 2. SIGN UP ATTEMPT
       const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { username }, 
+          data: { username },
         },
       });
 
-      if (authError) throw authError;
+      // 3. HANDLE RATE LIMITS OR "USER ALREADY EXISTS" ERRORS
+      if (authError) {
+        if (authError.message.includes("User already registered")) {
+          alert("This email is already registered. Please check your inbox for the confirmation link.");
+          return;
+        }
+        throw authError;
+      }
 
       alert("Signup successful! Please check your email for a confirmation link.");
       navigate("/login");
 
     } catch (error: any) {
-      console.error("Signup error:", error);
       alert(error.message);
     }
   };

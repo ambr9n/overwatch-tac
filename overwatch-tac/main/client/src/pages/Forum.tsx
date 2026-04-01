@@ -26,6 +26,7 @@ interface ForumPost {
 
 // MOD LIST
 const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31", "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae", "236ffca1-63de-44f4-bcd4-1772ab2ee94f"];
+const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
 export default function Forum({ currentUser }: { currentUser: any }) {
   const [posts, setPosts] = useState<ForumPost[]>([]);
@@ -70,7 +71,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
               user_id: user.id,
               username: user.user_metadata.username || "User_" + user.id.slice(0, 5),
               email: user.email,
-              profile_image_link: "https://i.imgur.com/HeIi0wU.png"
+              profile_image_link: DEFAULT_AVATAR
             }
           ]);
           fetchPosts();
@@ -97,24 +98,32 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   };
 
-  const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <img 
-          src={user?.profile_image_link || "https://i.imgur.com/HeIi0wU.png"} 
-          style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover' }} 
-        />
-        <div>
-          <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
-            {ADMIN_USERS.includes(userId) && <span style={{ background: "#ef4444", fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white' }}>MOD</span>}
-            <span style={{ color: 'white' }}>{user?.username}</span>
+  const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
+    // Fallback for broken image links (404s, etc)
+    const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+      e.currentTarget.src = DEFAULT_AVATAR;
+    };
+
+    return (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img 
+            src={user?.profile_image_link || DEFAULT_AVATAR} 
+            onError={handleImageError}
+            style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} 
+          />
+          <div>
+            <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
+              {ADMIN_USERS.includes(userId) && <span style={{ background: "#ef4444", fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white' }}>MOD</span>}
+              <span style={{ color: 'white' }}>{user?.username}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
-          <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
         </div>
+        {showDelete && <button onClick={onDelete} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 16 }}>🗑️</button>}
       </div>
-      {showDelete && <button onClick={onDelete} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 16 }}>🗑️</button>}
-    </div>
-  );
+    );
+  };
 
   const RenderReplies = ({ allReplies, parentId, postId, depth = 0 }: { allReplies: ForumReply[], parentId: string | null, postId: string, depth?: number }) => {
     const children = allReplies.filter(r => r.parent_reply_id === parentId);

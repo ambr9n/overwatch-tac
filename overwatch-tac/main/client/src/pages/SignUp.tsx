@@ -8,29 +8,11 @@ const SignUp: React.FC = () => {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleSignup = async (e: React.FormEvent) => {
+const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      // 1. STRICT EMAIL & USERNAME CHECK
-      // We check our 'Users' table to see if this email is already "active"
-      const { data: existingUser } = await supabase
-        .from("Users")
-        .select("email, username")
-        .or(`email.eq.${email.toLowerCase()},username.ilike.${username}`)
-        .maybeSingle();
-
-      if (existingUser) {
-        if (existingUser.email.toLowerCase() === email.toLowerCase()) {
-          alert("This email is already registered. Try logging in or resetting your password.");
-        } else {
-          alert("That username is already taken.");
-        }
-        return;
-      }
-
-      // 2. SIGN UP ATTEMPT
-      const { data, error: authError } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -38,17 +20,10 @@ const SignUp: React.FC = () => {
         },
       });
 
-      // 3. HANDLE RATE LIMITS OR "USER ALREADY EXISTS" ERRORS
-      if (authError) {
-        if (authError.message.includes("User already registered")) {
-          alert("This email is already registered. Please check your inbox for the confirmation link.");
-          return;
-        }
-        throw authError;
-      }
+      if (error) throw error;
 
-      alert("Signup successful! Please check your email for a confirmation link.");
-      navigate("/login");
+      alert("Signup success!");
+      navigate("/"); 
 
     } catch (error: any) {
       alert(error.message);

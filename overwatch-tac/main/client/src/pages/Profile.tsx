@@ -22,7 +22,6 @@ const Profile = () => {
       }
     });
 
-    // Optional: Listen for auth changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.user) {
@@ -46,27 +45,63 @@ const Profile = () => {
 
   const handleSavePhoto = async () => {
     if (!user || !photoURLInput) return;
+    
     try {
-      // Update user metadata
-      const { error } = await supabase.auth.updateUser({
+      // UPDATE THE DB
+      const { data, error, count } = await supabase
+        .from("Users")
+        .update({ profile_image_link: photoURLInput })
+        .eq("user_id", user.id)
+        .select();
+
+      if (error) {
+        console.error("DB Error:", error.message);
+        throw error;
+      }
+
+      // CHECK IF A ROW WAS ACTUALLY TOUCHED
+      if (!data || data.length === 0) {
+        console.warn("No row found matching user_id:", user.id);
+        alert("Error: User profile row not found in database.");
+        return;
+      }
+
+      // UPDATE AUTH METADATA
+      await supabase.auth.updateUser({
         data: { ...user.user_metadata, photoURL: photoURLInput },
       });
-      if (error) throw error;
+
       setPhotoURL(photoURLInput);
       setPhotoURLInput("");
+      alert("Success! Profile updated.");
+      
+      // Refresh to sync Navbar/Forum
+      window.location.reload();
+
     } catch (error: any) {
-      alert(error.message);
+      alert("Update failed: " + error.message);
     }
   };
 
   const handleRemovePhoto = async () => {
     if (!user) return;
     try {
-      const { error } = await supabase.auth.updateUser({
+      // Update Auth Metadata
+      const { error: authError } = await supabase.auth.updateUser({
         data: { ...user.user_metadata, photoURL: null },
       });
-      if (error) throw error;
+      if (authError) throw authError;
+
+      // Update Database Table
+      const { error: dbError } = await supabase
+        .from("Users")
+        .update({ profile_image_link: null })
+        .eq("user_id", user.id);
+
+      if (dbError) throw dbError;
+
       setPhotoURL(null);
+      alert("Profile picture removed.");
     } catch (error: any) {
       alert(error.message);
     }
@@ -120,7 +155,14 @@ const Profile = () => {
           <img
             src={photoURL}
             alt="Profile"
-            style={{ width: 120, borderRadius: "50%" }}
+            style={{ 
+              width: 150,
+              height: 150,
+              borderRadius: "50%",
+              objectFit: "cover",
+              border: "3px solid #e66feaff",
+              display: "block"
+            }}
           />
         </div>
       )}

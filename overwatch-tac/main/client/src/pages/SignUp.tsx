@@ -12,19 +12,52 @@ const SignUp: React.FC = () => {
     e.preventDefault();
 
     try {
-      // Sign up with Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
+      // CHECK IF USERNAME OR EMAIL IS ALREADY TAKEN
+      const { data: existingUser, error: checkError } = await supabase
+        .from("Users")
+        .select("username, email")
+        .or(`username.ilike.${username},email.eq.${email}`) 
+        .maybeSingle();
+
+      if (existingUser) {
+        if (existingUser.username.toLowerCase() === username.toLowerCase()) {
+          alert("That username is already taken.");
+        } else {
+          alert("This email is already registered. Try logging in instead!");
+        }
+        return;
+      }
+
+      // SIGN UP WITH SUPABASE AUTH
+      const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { username }, // store extra info
+          data: { username }, 
         },
       });
 
-      if (error) throw error;
+      if (authError) throw authError;
 
-      alert("Signup successful! Check your email for confirmation.");
-      navigate("/"); // redirect after signup
+      // INSERT INTO 'Users' TABLE
+      if (data.user) {
+        const { error: dbError } = await supabase.from("Users").insert([
+          { 
+            user_id: data.user.id, 
+            username: username, 
+            email: email,
+            profile_image_link: "https://i.imgur.com/HeIi0wU.png" 
+          },
+        ]);
+
+        if (dbError) {
+          console.error("Database Insert Error:", dbError);
+          throw new Error("Error saving user profile to database.");
+        }
+      }
+
+      alert("Signup successful! Please check your email for a confirmation link.");
+      navigate("/login");
     } catch (error: any) {
       alert(error.message);
     }

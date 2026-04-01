@@ -13,20 +13,21 @@ const Login: React.FC = () => {
     try {
       let emailToUse = identifier;
 
-      // If user entered a username, we need to map it to email
+      // If user entered a username, map it to email
       if (!identifier.includes("@")) {
-        const { data: userProfiles, error: fetchError } = await supabase
-          .from("profiles") // <-- optional table if you store usernames
+        const { data: userRow, error: fetchError } = await supabase
+          .from("Users") // Change this from "profiles" to "Users"
           .select("email")
           .eq("username", identifier)
           .single();
 
-        if (fetchError || !userProfiles?.email) {
+        if (fetchError || !userRow?.email) {
+          console.error("Fetch error:", fetchError);
           alert("Username not found");
           return;
         }
 
-        emailToUse = userProfiles.email;
+        emailToUse = userRow.email;
       }
 
       // Login with Supabase
@@ -36,12 +37,11 @@ const Login: React.FC = () => {
       });
 
       if (error) throw error;
-
-      navigate("/"); // redirect after login
+      navigate("/"); 
     } catch (error: any) {
       alert(error.message);
     }
-  };
+};
 
   return (
     <div style={{ maxWidth: "400px", margin: "50px auto", textAlign: "center" }}>

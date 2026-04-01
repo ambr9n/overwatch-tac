@@ -1,12 +1,45 @@
-html, body, #root {
-  height: 100%;
-  width: 100%;
+/* Reset and global styles */
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  scrollbar-gutter: stable;
 }
 
-body {
+html, body {
+  height: 100%;
+  width: 100%;
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  background-color: #242424;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+
+  /* Solid background to prevent overscroll white */
+  background-color: #140a2a;
+}
+
+/* Root element fills viewport */
+#root {
+  min-height: 100vh;         /* ensures at least viewport height */
+  display: flex;
+  flex-direction: column;     /* stack navbar + content */
+  background-color: #140a2a;  /* match navbar background */
+}
+
+/* Optional: global scrollbar styling */
+body::-webkit-scrollbar {
+  width: 8px;
+}
+body::-webkit-scrollbar-thumb {
+  background: #9333ea;
+  border-radius: 4px;
+}
+body::-webkit-scrollbar-track {
+  background: #1a0f2a;
+}
+
+/* App wrapper for full-page gradient */
+.app-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #140a2a 0%, #0f051f 100%);
 }

@@ -3,6 +3,11 @@
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+
+  /* Fixes overscroll background issue */
+  min-height: 100vh; /* ensures root fills the viewport vertically */
+  background-color: #242424; /* match body/navbar background */
+  box-sizing: border-box; /* ensures padding doesn’t break height */
 }
 
 .logo {

@@ -13,7 +13,6 @@ const Login: React.FC = () => {
     try {
       let emailToUse = identifier;
 
-      // If user entered a username, map it to email
       if (!identifier.includes("@")) {
         const { data: userRow, error: fetchError } = await supabase
           .from("Users") // Change this from "profiles" to "Users"
@@ -30,7 +29,6 @@ const Login: React.FC = () => {
         emailToUse = userRow.email;
       }
 
-      // Login with Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email: emailToUse,
         password,

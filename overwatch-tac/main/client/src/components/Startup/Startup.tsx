@@ -12,7 +12,7 @@ const Startup = ({ onFinish }: Props) => {
     const timer = setTimeout(() => {
       setFadeOut(true);
       setTimeout(onFinish, 800); // wait for fade animation
-    }, 2500); // how long intro shows (2.5s)
+    }, 2000); // how long intro shows (2.5s)
 
     return () => clearTimeout(timer);
   }, [onFinish]);
@@ -20,8 +20,10 @@ const Startup = ({ onFinish }: Props) => {
   return (
     <div className={`startup ${fadeOut ? "fade-out" : ""}`}>
       <h1 className="startup-logo">
-        Toptext<br />
-        <span>Bottomtext</span>
+        <p style={{ textAlign: 'center' }}>
+          Overtac<br />
+        <span></span>
+        </p>
       </h1>
     </div>
   );

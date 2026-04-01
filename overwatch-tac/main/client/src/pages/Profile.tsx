@@ -14,19 +14,29 @@ const Profile = () => {
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
+
   useEffect(() => {
-    const sessionUser = supabase.auth.getUser().then(({ data: { user } }) => {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUser(user as SupabaseUser);
-        setPhotoURL(user.user_metadata?.photoURL || null);
+        const { data: dbUser } = await supabase
+          .from("Users")
+          .select("profile_image_link")
+          .eq("user_id", user.id)
+          .single();
+        
+        setPhotoURL(dbUser?.profile_image_link || user.user_metadata?.photoURL || DEFAULT_AVATAR);
       }
-    });
+    };
+
+    fetchProfile();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.user) {
           setUser(session.user as SupabaseUser);
-          setPhotoURL(session.user.user_metadata?.photoURL || null);
         } else {
           setUser(null);
           setPhotoURL(null);
@@ -47,26 +57,13 @@ const Profile = () => {
     if (!user || !photoURLInput) return;
     
     try {
-      // UPDATE THE DB
-      const { data, error, count } = await supabase
+      const { error: dbError } = await supabase
         .from("Users")
         .update({ profile_image_link: photoURLInput })
-        .eq("user_id", user.id)
-        .select();
+        .eq("user_id", user.id);
 
-      if (error) {
-        console.error("DB Error:", error.message);
-        throw error;
-      }
+      if (dbError) throw dbError;
 
-      // CHECK IF A ROW WAS ACTUALLY TOUCHED
-      if (!data || data.length === 0) {
-        console.warn("No row found matching user_id:", user.id);
-        alert("Error: User profile row not found in database.");
-        return;
-      }
-
-      // UPDATE AUTH METADATA
       await supabase.auth.updateUser({
         data: { ...user.user_metadata, photoURL: photoURLInput },
       });
@@ -74,8 +71,6 @@ const Profile = () => {
       setPhotoURL(photoURLInput);
       setPhotoURLInput("");
       alert("Success! Profile updated.");
-      
-      // Refresh to sync Navbar/Forum
       window.location.reload();
 
     } catch (error: any) {
@@ -86,22 +81,20 @@ const Profile = () => {
   const handleRemovePhoto = async () => {
     if (!user) return;
     try {
-      // Update Auth Metadata
-      const { error: authError } = await supabase.auth.updateUser({
-        data: { ...user.user_metadata, photoURL: null },
+      await supabase.auth.updateUser({
+        data: { ...user.user_metadata, photoURL: DEFAULT_AVATAR },
       });
-      if (authError) throw authError;
 
-      // Update Database Table
       const { error: dbError } = await supabase
         .from("Users")
-        .update({ profile_image_link: null })
+        .update({ profile_image_link: DEFAULT_AVATAR })
         .eq("user_id", user.id);
 
       if (dbError) throw dbError;
 
-      setPhotoURL(null);
-      alert("Profile picture removed.");
+      setPhotoURL(DEFAULT_AVATAR);
+      alert("Profile picture reset to default.");
+      window.location.reload();
     } catch (error: any) {
       alert(error.message);
     }
@@ -150,22 +143,23 @@ const Profile = () => {
     >
       <h1>Profile</h1>
 
-      {photoURL && (
-        <div style={{ marginBottom: "15px" }}>
-          <img
-            src={photoURL}
-            alt="Profile"
-            style={{ 
-              width: 150,
-              height: 150,
-              borderRadius: "50%",
-              objectFit: "cover",
-              border: "3px solid #e66feaff",
-              display: "block"
-            }}
-          />
-        </div>
-      )}
+      <div style={{ marginBottom: "15px" }}>
+        <img
+          src={photoURL || DEFAULT_AVATAR}
+          alt="Profile"
+          style={{ 
+            width: 150,
+            height: 150,
+            borderRadius: "50%",
+            objectFit: "cover",
+            border: "3px solid #e66feaff",
+            display: "block"
+          }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
+          }}
+        />
+      </div>
 
       <p style={{ marginBottom: "10px" }}>Username: {user.user_metadata?.username}</p>
       <p style={{ marginBottom: "10px" }}>Email: {user.email}</p>
@@ -189,26 +183,26 @@ const Profile = () => {
             color: "white",
             border: "none",
             fontWeight: "bold",
+            cursor: "pointer"
           }}
         >
           Save
         </button>
 
-        {photoURL && (
-          <button
-            onClick={handleRemovePhoto}
-            style={{
-              padding: "8px 12px",
-              borderRadius: "5px",
-              background: "#6c446dff",
-              color: "white",
-              border: "none",
-              fontWeight: "bold",
-            }}
-          >
-            Remove
-          </button>
-        )}
+        <button
+          onClick={handleRemovePhoto}
+          style={{
+            padding: "8px 12px",
+            borderRadius: "5px",
+            background: "#6c446dff",
+            color: "white",
+            border: "none",
+            fontWeight: "bold",
+            cursor: "pointer"
+          }}
+        >
+          Remove
+        </button>
       </div>
 
       <div>
@@ -222,6 +216,7 @@ const Profile = () => {
             color: "white",
             border: "none",
             fontWeight: "bold",
+            cursor: "pointer"
           }}
         >
           Log Out

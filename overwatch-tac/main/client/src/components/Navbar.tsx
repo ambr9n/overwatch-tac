@@ -7,21 +7,24 @@ const Navbar: FC = () => {
   const [user, setUser] = useState<any | null>(null);
   const [profileData, setProfileData] = useState<{ username: string; profile_image_link: string } | null>(null);
 
-  // Fetch real-time data from the 'Users' table
+  const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
+
   const fetchProfileFromDB = async (userId: string) => {
     const { data, error } = await supabase
       .from("Users")
       .select("username, profile_image_link")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (!error && data) {
-      setProfileData(data);
+      setProfileData({
+        username: data.username,
+        profile_image_link: data.profile_image_link || DEFAULT_AVATAR
+      });
     }
   };
 
   useEffect(() => {
-    // Initial user check
     const initAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -31,7 +34,6 @@ const Navbar: FC = () => {
     };
     initAuth();
 
-    // Listen for login/logout
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user || null;
       setUser(currentUser);
@@ -57,10 +59,9 @@ const Navbar: FC = () => {
 
       <div className="nav-right">
         {user ? (
-          <NavLink to={`/profile/${user.id}`} className="nav-link login profile-link">
-            {/* Using the DB image with a fallback */}
+          <NavLink to={`/profile`} className="nav-link login profile-link">
             <img
-              src={profileData?.profile_image_link || "https://i.imgur.com/HeIi0wU.png"}
+              src={profileData?.profile_image_link || DEFAULT_AVATAR}
               alt="Profile"
               style={{
                 width: 32,
@@ -69,10 +70,12 @@ const Navbar: FC = () => {
                 marginRight: 10,
                 objectFit: "cover",
                 verticalAlign: "middle",
-                border: "1px solid #444"
+                border: "1px solid #e66feaff"
+              }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
               }}
             />
-            {/* Using the DB username */}
             {profileData?.username || "Profile"}
           </NavLink>
         ) : (

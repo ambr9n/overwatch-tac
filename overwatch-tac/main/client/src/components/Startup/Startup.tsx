@@ -9,20 +9,35 @@ const Startup = ({ onFinish }: Props) => {
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
+    const hasSeenIntro = sessionStorage.getItem("hasSeenIntro");
+
+    if (hasSeenIntro) {
+      onFinish();
+      return;
+    }
+
     const timer = setTimeout(() => {
       setFadeOut(true);
-      setTimeout(onFinish, 800); // wait for fade animation
-    }, 2000); // how long intro shows (2.5s)
+      
+      setTimeout(() => {
+        sessionStorage.setItem("hasSeenIntro", "true");
+        onFinish();
+      }, 800); 
+    }, 2000); 
 
     return () => clearTimeout(timer);
   }, [onFinish]);
+
+  if (typeof window !== "undefined" && sessionStorage.getItem("hasSeenIntro")) {
+    return null;
+  }
 
   return (
     <div className={`startup ${fadeOut ? "fade-out" : ""}`}>
       <h1 className="startup-logo">
         <p style={{ textAlign: 'center' }}>
           Overtac<br />
-        <span></span>
+          <span></span>
         </p>
       </h1>
     </div>

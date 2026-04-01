@@ -34,6 +34,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
 
+  const isMod = currentUser && ADMIN_USERS.includes(currentUser.id);
+
   const fetchPosts = async () => {
     const { data, error } = await supabase
       .from("Forum_Posts")
@@ -99,6 +101,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <div style={{ marginLeft: depth > 0 ? 20 : 0, borderLeft: depth > 0 ? "2px solid #222" : "none", paddingLeft: depth > 0 ? 15 : 0 }}>
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser?.id);
+          // Mod or Owner can delete
+          const canDeleteReply = !reply.is_deleted && (isMod || currentUser?.id === reply.user_id);
+
           return (
             <div key={reply.reply_id} style={{ marginTop: 15 }}>
               <div style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222' }}>
@@ -106,8 +111,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                   user={reply.Users} 
                   userId={reply.user_id} 
                   createdAt={reply.created_at}
-                  showDelete={currentUser?.id === reply.user_id && !reply.is_deleted}
-                  onDelete={() => { if(window.confirm("Delete?")) supabase.from("Forum_Replies").update({is_deleted: true}).eq("reply_id", reply.reply_id).then(fetchPosts)}}
+                  showDelete={canDeleteReply}
+                  onDelete={() => { if(window.confirm("Delete this reply?")) supabase.from("Forum_Replies").update({is_deleted: true}).eq("reply_id", reply.reply_id).then(fetchPosts)}}
                 />
                 
                 <div style={{ margin: '14px 0' }}>
@@ -147,6 +152,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       {posts.map((post) => {
         const replyCount = post.Forum_Replies?.filter(r => !r.is_deleted).length || 0;
         const isExpanded = expandedPosts[post.post_id];
+        // Mod or Owner can delete
+        const canDeletePost = !post.is_deleted && (isMod || currentUser?.id === post.user_id);
 
         return (
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
@@ -154,13 +161,13 @@ export default function Forum({ currentUser }: { currentUser: any }) {
               user={post.Users} 
               userId={post.user_id} 
               createdAt={post.created_at}
-              showDelete={currentUser?.id === post.user_id && !post.is_deleted}
-              onDelete={() => { if(window.confirm("Delete?")) supabase.from("Forum_Posts").update({is_deleted: true}).eq("post_id", post.post_id).then(fetchPosts)}}
+              showDelete={canDeletePost}
+              onDelete={() => { if(window.confirm("Delete this post?")) supabase.from("Forum_Posts").update({is_deleted: true}).eq("post_id", post.post_id).then(fetchPosts)}}
             />
 
             <div style={{ margin: "18px 0" }}>
               {post.is_deleted ? (
-                <p style={{ color: "#444", fontStyle: "italic", margin: 0 }}>[This post has been removed by the author]</p>
+                <p style={{ color: "#444", fontStyle: "italic", margin: 0 }}>[This post has been removed]</p>
               ) : (
                 <p style={{ fontSize: '1rem', color: '#ddd', margin: 0 }}>{post.text}</p>
               )}

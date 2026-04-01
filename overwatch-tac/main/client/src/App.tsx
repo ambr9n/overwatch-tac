@@ -1,6 +1,6 @@
-// client/src/App.tsx
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "./Supabase";
 
 import Navbar from "./components/Navbar";
 import Startup from "./components/Startup/Startup";
@@ -15,6 +15,21 @@ import Forum from "./pages/Forum";
 
 const App = () => {
   const [showIntro, setShowIntro] = useState(true);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check active session on load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
     <>
@@ -32,7 +47,8 @@ const App = () => {
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Login />} />
               <Route path="/profile/:uid?" element={<Profile />} />
-              <Route path="/forum" element={<Forum />} />
+              <Route path="/forum" element={<Forum currentUser={user} />} />
+              
             </Routes>
           </main>
         </div>

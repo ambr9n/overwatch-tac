@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { signInWithEmailAndPassword, getAuth } from "firebase/auth";
-import { auth } from "../firebase";
+import { supabase } from "../Supabase";
 import { useNavigate } from "react-router-dom";
 
 const Login: React.FC = () => {
@@ -14,23 +13,33 @@ const Login: React.FC = () => {
     try {
       let emailToUse = identifier;
 
-      // If the identifier is a username, find the email
       if (!identifier.includes("@")) {
-        // Check if current user exists in Firebase Auth with displayName
-        const authInstance = getAuth();
-        const users = authInstance.currentUser ? [authInstance.currentUser] : [];
-        // Note: Firebase Auth doesn't allow querying all users from client
-        // For a simple local dev solution, we can store username->email mapping in Firestore
-        alert("Logging in with username requires storing username->email mapping in Firestore");
-        return;
+        const { data: userRow, error: fetchError } = await supabase
+          .from("Users") // Change this from "profiles" to "Users"
+          .select("email")
+          .eq("username", identifier)
+          .single();
+
+        if (fetchError || !userRow?.email) {
+          console.error("Fetch error:", fetchError);
+          alert("Username not found");
+          return;
+        }
+
+        emailToUse = userRow.email;
       }
 
-      await signInWithEmailAndPassword(auth, emailToUse, password);
-      navigate("/"); // redirect after login
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password,
+      });
+
+      if (error) throw error;
+      navigate("/"); 
     } catch (error: any) {
       alert(error.message);
     }
-  };
+};
 
   return (
     <div style={{ maxWidth: "400px", margin: "50px auto", textAlign: "center" }}>

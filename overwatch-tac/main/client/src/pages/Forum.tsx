@@ -82,6 +82,38 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   }, []);
 
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm("Permanent delete? This wipes the post and ALL replies.")) return;
+    
+    const { error } = await supabase
+      .from("Forum_Posts")
+      .delete()
+      .eq("post_id", postId);
+
+    if (error) {
+      console.error("Supabase Delete Error:", error);
+      alert(`Delete failed: ${error.message}`);
+    } else {
+      setPosts(prev => prev.filter(p => p.post_id !== postId));
+    }
+  };
+
+  const handleDeleteReply = async (replyId: string) => {
+    if (!window.confirm("Delete this reply and all sub-replies?")) return;
+
+    const { error } = await supabase
+      .from("Forum_Replies")
+      .delete()
+      .eq("reply_id", replyId);
+
+    if (error) {
+      console.error("Supabase Reply Delete Error:", error);
+      alert(`Delete failed: ${error.message}`);
+    } else {
+      fetchPosts();
+    }
+  };
+
   const handleLike = async (postId: string) => {
     if (!currentUser) return;
     const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
@@ -99,7 +131,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   };
 
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
-    // Fallback for broken image links (404s, etc)
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
       e.currentTarget.src = DEFAULT_AVATAR;
     };
@@ -133,7 +164,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <div style={{ marginLeft: depth > 0 ? 20 : 0, borderLeft: depth > 0 ? "2px solid #222" : "none", paddingLeft: depth > 0 ? 15 : 0 }}>
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser?.id);
-          const canDeleteReply = !reply.is_deleted && (isMod || currentUser?.id === reply.user_id);
+          const canDeleteReply = (isMod || currentUser?.id === reply.user_id);
 
           return (
             <div key={reply.reply_id} style={{ marginTop: 15 }}>
@@ -143,25 +174,19 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                   userId={reply.user_id} 
                   createdAt={reply.created_at}
                   showDelete={canDeleteReply}
-                  onDelete={() => { if(window.confirm("Delete this reply?")) supabase.from("Forum_Replies").update({is_deleted: true}).eq("reply_id", reply.reply_id).then(fetchPosts)}}
+                  onDelete={() => handleDeleteReply(reply.reply_id)}
                 />
                 
                 <div style={{ margin: '14px 0' }}>
-                  {reply.is_deleted ? (
-                    <p style={{ color: "#444", fontSize: 14, fontStyle: "italic", margin: 0 }}>[Reply deleted]</p>
-                  ) : (
-                    <p style={{ fontSize: 14, color: '#ccc', margin: 0 }}>{reply.text}</p>
-                  )}
+                  <p style={{ fontSize: 14, color: '#ccc', margin: 0 }}>{reply.text}</p>
                 </div>
 
-                {!reply.is_deleted && (
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
-                      👍 {reply.Reply_Likes?.length || 0}
-                    </button>
-                    <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
+                    👍 {reply.Reply_Likes?.length || 0}
+                  </button>
+                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
+                </div>
               </div>
               <RenderReplies allReplies={allReplies} parentId={reply.reply_id} postId={postId} depth={depth + 1} />
             </div>
@@ -181,9 +206,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       </div>
 
       {posts.map((post) => {
-        const replyCount = post.Forum_Replies?.filter(r => !r.is_deleted).length || 0;
+        const replyCount = post.Forum_Replies?.length || 0;
         const isExpanded = expandedPosts[post.post_id];
-        const canDeletePost = !post.is_deleted && (isMod || currentUser?.id === post.user_id);
+        const canDeletePost = (isMod || currentUser?.id === post.user_id);
 
         return (
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
@@ -192,30 +217,24 @@ export default function Forum({ currentUser }: { currentUser: any }) {
               userId={post.user_id} 
               createdAt={post.created_at}
               showDelete={canDeletePost}
-              onDelete={() => { if(window.confirm("Delete this post?")) supabase.from("Forum_Posts").update({is_deleted: true}).eq("post_id", post.post_id).then(fetchPosts)}}
+              onDelete={() => handleDeletePost(post.post_id)}
             />
 
             <div style={{ margin: "18px 0" }}>
-              {post.is_deleted ? (
-                <p style={{ color: "#444", fontStyle: "italic", margin: 0 }}>[This post has been removed]</p>
-              ) : (
-                <p style={{ fontSize: '1rem', color: '#ddd', margin: 0 }}>{post.text}</p>
-              )}
+              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0 }}>{post.text}</p>
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
-                {!post.is_deleted && (
-                  <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser?.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
-                    👍 {post.Post_Likes?.length || 0}
-                  </button>
-                )}
-                
-                <button 
-                    onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))}
-                    style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.9rem' }}
-                >
-                    {isExpanded ? 'Hide Replies' : replyCount > 0 ? `See ${replyCount} Replies` : 'Reply'}
-                </button>
+              <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser?.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
+                👍 {post.Post_Likes?.length || 0}
+              </button>
+              
+              <button 
+                  onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))}
+                  style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.9rem' }}
+              >
+                  {isExpanded ? 'Hide Replies' : replyCount > 0 ? `See ${replyCount} Replies` : 'Reply'}
+              </button>
             </div>
 
             {isExpanded && (

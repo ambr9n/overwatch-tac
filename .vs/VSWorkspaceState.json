@@ -1,0 +1,12 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\overwatch-tac",
+    "\\overwatch-tac\\main",
+    "\\overwatch-tac\\main\\client",
+    "\\overwatch-tac\\main\\client\\src",
+    "\\overwatch-tac\\main\\server"
+  ],
+  "SelectedNode": "\\overwatch-tac\\main\\client\\src\\Supabase.ts",
+  "PreviewInSolutionExplorer": false
+}

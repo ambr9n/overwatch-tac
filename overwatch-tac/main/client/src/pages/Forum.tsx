@@ -2,6 +2,50 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../Supabase';
 import { NavLink } from 'react-router-dom';
 
+/**
+ * CUSTOM MODAL COMPONENT
+ * Styled to match the site's dark/purple theme.
+ */
+const CustomModal: React.FC<{
+  isOpen: boolean;
+  title: string;
+  children?: React.ReactNode;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  confirmColor?: string;
+}> = ({ isOpen, title, children, onConfirm, onCancel, confirmText = "OK", confirmColor = "#e60082" }) => {
+  if (!isOpen) return null;
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", 
+      justifyContent: "center", alignItems: "center", zIndex: 1000,
+      backdropFilter: "blur(4px)"
+    }}>
+      <div style={{
+        background: "#161616", padding: "30px", borderRadius: "12px",
+        border: "1px solid #282828", boxShadow: `0 0 30px ${confirmColor}33`,
+        width: "400px", textAlign: "center"
+      }}>
+        <h3 style={{ color: "#f65dfb", marginBottom: "20px", fontSize: "22px", fontWeight: "750" }}>{title}</h3>
+        <div style={{ marginBottom: "25px", color: "#aaa", fontSize: "14px", lineHeight: "1.5" }}>{children}</div>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          <button onClick={onCancel} style={{
+            background: "transparent", color: "#888", border: "1px solid #444",
+            padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold"
+          }}>Cancel</button>
+          <button onClick={onConfirm} style={{
+            background: confirmColor, color: "white", border: "none",
+            padding: "10px 24px", borderRadius: "6px", cursor: "pointer", 
+            fontWeight: "bold", boxShadow: `0 4px 10px ${confirmColor}4d`
+          }}>{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface ForumReply {
   reply_id: string;
   post_id: string;
@@ -42,6 +86,13 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
+
+  // States for custom delete modal
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
+    isOpen: false,
+    type: 'post',
+    id: null
+  });
 
   const fetchPosts = async () => {
     const { data, error } = await supabase
@@ -97,18 +148,21 @@ export default function Forum({ currentUser }: { currentUser: any }) {
 
   const isMod = ADMIN_USERS.includes(currentUser.id);
 
-  const handleDeletePost = async (postId: string) => {
-    if (!window.confirm("Permanent delete? This wipes the post and ALL replies.")) return;
-    const { error } = await supabase.from("Forum_Posts").delete().eq("post_id", postId);
-    if (error) alert(`Delete failed: ${error.message}`);
-    else setPosts(prev => prev.filter(p => p.post_id !== postId));
-  };
-
-  const handleDeleteReply = async (replyId: string) => {
-    if (!window.confirm("Delete this reply and all sub-replies?")) return;
-    const { error } = await supabase.from("Forum_Replies").delete().eq("reply_id", replyId);
-    if (error) alert(`Delete failed: ${error.message}`);
-    else fetchPosts();
+  // New confirmation handler for the custom modal
+  const confirmDelete = async () => {
+    if (!deleteModal.id) return;
+    
+    if (deleteModal.type === 'post') {
+      const { error } = await supabase.from("Forum_Posts").delete().eq("post_id", deleteModal.id);
+      if (error) alert(`Delete failed: ${error.message}`);
+      else setPosts(prev => prev.filter(p => p.post_id !== deleteModal.id));
+    } else {
+      const { error } = await supabase.from("Forum_Replies").delete().eq("reply_id", deleteModal.id);
+      if (error) alert(`Delete failed: ${error.message}`);
+      else fetchPosts();
+    }
+    
+    setDeleteModal({ isOpen: false, type: 'post', id: null });
   };
 
   const handleLike = async (postId: string) => {
@@ -191,7 +245,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                   userId={reply.user_id} 
                   createdAt={reply.created_at}
                   showDelete={canDeleteReply}
-                  onDelete={() => handleDeleteReply(reply.reply_id)}
+                  onDelete={() => setDeleteModal({ isOpen: true, type: 'reply', id: reply.reply_id })}
                 />
                 <div style={{ margin: '14px 0' }}>
                   <p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
@@ -212,19 +266,33 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   };
 
   return (
-    <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable' } as any}>
+    <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable', background: '#000', minHeight: '100vh' } as any}>
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
         <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#3b82f6", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
       </div>
+
+      <CustomModal 
+        isOpen={deleteModal.isOpen} 
+        title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"}
+        confirmText="Delete Forever"
+        confirmColor="#ff4d4d"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}
+      >
+        {deleteModal.type === 'post' 
+          ? "Are you sure? This will permanently delete this post and ALL replies." 
+          : "Are you sure? This will permanently delete this reply and all sub-replies."}
+      </CustomModal>
+
       {posts.map((post) => {
         const replyCount = post.Forum_Replies?.length || 0;
         const isExpanded = expandedPosts[post.post_id];
         const canDeletePost = (isMod || currentUser.id === post.user_id);
         return (
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
-            <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={canDeletePost} onDelete={() => handleDeletePost(post.post_id)} />
+            <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={canDeletePost} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
             <div style={{ margin: "18px 0" }}>
               <p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             </div>

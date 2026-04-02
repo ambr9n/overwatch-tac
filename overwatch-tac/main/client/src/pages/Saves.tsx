@@ -150,7 +150,7 @@ const Saves: React.FC = () => {
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#e60082"; e.currentTarget.style.transform = "translateY(-2px)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#282828"; e.currentTarget.style.transform = "translateY(0)"; }}
               >
-                <div style={{ fontWeight: "700", color: "#f65dfb", fontSize: "18px", letterSpacing: "0.5px" }}>{save.name}</div>
+                <div style={{ fontWeight: "700", color: "#ffffff", fontSize: "18px", letterSpacing: "0.5px" }}>{save.name}</div>
                 <div style={{ color: "#e0e0e0", fontSize: "14px", fontWeight: "500" }}>{save.Maps?.name || "Unknown"}</div>
                 <div style={{ color: "#777", fontSize: "12px", fontFamily: "monospace" }}>{new Date(save.created_at).toLocaleDateString()}</div>
 

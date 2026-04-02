@@ -32,8 +32,61 @@ interface Marker {
   heroName?: string;
 }
 
+interface CustomModalProps {
+  isOpen: boolean;
+  title: string;
+  children?: React.ReactNode;
+  onConfirm: () => void;
+  onCancel?: () => void;
+  confirmText?: string;
+  showCancel?: boolean;
+}
+
+/**
+ * CUSTOM MODAL COMPONENT
+ * Styled to match the purple/dark theme of the Forum and Saves pages.
+ */
+const CustomModal: React.FC<CustomModalProps> = ({ 
+  isOpen, title, children, onConfirm, onCancel, confirmText = "OK", showCancel = true 
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", 
+      justifyContent: "center", alignItems: "center", zIndex: 1000,
+      backdropFilter: "blur(4px)"
+    }}>
+      <div style={{
+        background: "#161616", padding: "30px", borderRadius: "12px",
+        border: "1px solid #282828", boxShadow: "0 0 30px rgba(230, 0, 130, 0.2)",
+        width: "400px", textAlign: "center"
+      }}>
+        <h3 style={{ color: "#f65dfb", marginBottom: "20px", fontSize: "22px", fontWeight: "750" }}>
+          {title}
+        </h3>
+        <div style={{ marginBottom: "25px" }}>{children}</div>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          {showCancel && (
+            <button onClick={onCancel} style={{
+              background: "transparent", color: "#888", border: "1px solid #444",
+              padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold"
+            }}>Cancel</button>
+          )}
+          <button onClick={onConfirm} style={{
+            background: "#e60082", color: "white", border: "none",
+            padding: "10px 24px", borderRadius: "6px", cursor: "pointer", 
+            fontWeight: "bold", boxShadow: "0 4px 10px rgba(230, 0, 130, 0.3)"
+          }}>{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const gameModes: GameMode[] = ["Hybrid", "Escort", "Control", "Push", "Flashpoint", "Assault", "Clash"];
-const roles = ["Tank", "Damage", "Support"];
+const roles = ["Damage", "Support", "Tank"];
 
 const TacMap: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -43,15 +96,20 @@ const TacMap: React.FC = () => {
   const [mapList, setMapList] = useState<MapData[]>([]);
   const [heroAssets, setHeroAssets] = useState<HeroAsset[]>([]);
   const [markers, setMarkers] = useState<Marker[]>([]);
-  const [description, setDescription] = useState(""); // Linked to Saved_Maps.description
+  const [description, setDescription] = useState(""); 
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<string | null>(null);
   const [activeTeam, setActiveTeam] = useState<Team>("ally");
-  const [activeRoleTab, setActiveRoleTab] = useState<string>("Tank");
+  const [activeRoleTab, setActiveRoleTab] = useState<string>("Damage");
   const [isDrawing, setIsDrawing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showMapSelection, setShowMapSelection] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Modal States
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [newStrategyName, setNewStrategyName] = useState("");
 
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,10 +118,6 @@ const TacMap: React.FC = () => {
   const allyMarkers = markers.filter(m => m.team === "ally");
   const enemyMarkers = markers.filter(m => m.team === "enemy");
 
-  /**
-   * INITIAL DATA FETCHING
-   * Fetches all available maps and hero assets from Supabase on mount.
-   */
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -89,10 +143,6 @@ const TacMap: React.FC = () => {
     fetchData();
   }, []);
 
-  /**
-   * LOAD STRATEGY EFFECT
-   * If a 'load' ID exists in the URL, fetch and populate the map state.
-   */
   useEffect(() => {
     if (loadId && mapList.length > 0 && heroAssets.length > 0) {
       loadSavedStrategy(loadId);
@@ -102,7 +152,6 @@ const TacMap: React.FC = () => {
   const loadSavedStrategy = async (id: string) => {
     setLoading(true);
     try {
-      // 1. Fetch Header & Description
       const { data: save, error: sError } = await supabase
         .from("Saved_Maps")
         .select(`*, Maps(name, map_type)`)
@@ -113,10 +162,9 @@ const TacMap: React.FC = () => {
 
       setSelectedMode(save.Maps.map_type);
       setSelectedMap(save.Maps.name);
-      setDescription(save.description || ""); // Set description text
+      setDescription(save.description || ""); 
       setShowMapSelection(false);
 
-      // 2. Fetch Markers (Map_Assets)
       const { data: assets, error: aError } = await supabase
         .from("Map_Assets")
         .select("*")
@@ -130,7 +178,7 @@ const TacMap: React.FC = () => {
           id: Math.random(), 
           x: a.x_position,
           y: a.y_position,
-          team: a.hero_team as Team, // Uses the 'team' (text) column we created
+          team: a.hero_team as Team,
           type: a.asset_id ? "asset" : "player",
           iconUrl: hero?.image_path,
           heroName: hero?.name,
@@ -139,7 +187,6 @@ const TacMap: React.FC = () => {
       });
       setMarkers(loadedMarkers);
 
-      // 3. Fetch Drawing Path
       const { data: drawing, error: dError } = await supabase
         .from("Map_Drawings")
         .select("path")
@@ -162,9 +209,6 @@ const TacMap: React.FC = () => {
     }
   };
 
-  /**
-   * DRAWING LOGIC
-   */
   const getCanvasCoords = (e: React.MouseEvent | MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -176,7 +220,7 @@ const TacMap: React.FC = () => {
   };
 
   const startDrawing = (e: React.MouseEvent) => {
-    if (e.shiftKey) return; // Shift + Click is reserved for generic markers
+    if (e.shiftKey) return; 
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const { x, y } = getCanvasCoords(e);
@@ -197,9 +241,6 @@ const TacMap: React.FC = () => {
     ctx.stroke();
   };
 
-  /**
-   * DRAG & DROP LOGIC
-   */
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const assetData = JSON.parse(e.dataTransfer.getData("assetData"));
@@ -247,34 +288,34 @@ const TacMap: React.FC = () => {
   };
 
   /**
-   * SAVE STRATEGY
-   * Packages markers, drawing, and description into Supabase.
+   * SAVE STRATEGY FLOW
    */
-  const handleSaveStrategy = async () => {
+  const triggerSaveFlow = () => {
     if (!currentMap) return alert("Please select a map before saving.");
-    const strategyName = prompt("Enter a name for this strategy:");
-    if (!strategyName) return;
+    setIsNameModalOpen(true);
+  };
 
+  const finalizeSave = async () => {
+    if (!newStrategyName) return;
+    setIsNameModalOpen(false);
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Please log in to save.");
 
-      // 1. Save Header (Saved_Maps)
       const { data: saveHeader, error: headerError } = await supabase
         .from("Saved_Maps")
         .insert([{
-          map_id: currentMap.map_id,
+          map_id: currentMap!.map_id,
           user_id: user.id,
-          name: strategyName,
-          description: description // Uses existing text column
+          name: newStrategyName,
+          description: description 
         }])
         .select()
         .single();
 
       if (headerError) throw headerError;
 
-      // 2. Save Assets
       if (markers.length > 0) {
         const assetsToInsert = markers.map((m) => ({
           save_id: saveHeader.save_id,
@@ -288,7 +329,6 @@ const TacMap: React.FC = () => {
         await supabase.from("Map_Assets").insert(assetsToInsert);
       }
 
-      // 3. Save Drawing
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d');
@@ -305,7 +345,8 @@ const TacMap: React.FC = () => {
         }
       }
 
-      alert("Strategy saved successfully!");
+      setIsConfirmModalOpen(true);
+      setNewStrategyName("");
     } catch (err: any) {
       alert(`Save failed: ${err.message}`);
     } finally {
@@ -321,8 +362,8 @@ const TacMap: React.FC = () => {
   if (loading && !selectedMap) return <div style={{color: "white", padding: "100px"}}>Loading...</div>;
 
   return (
-    <div style={{ padding: "20px", marginTop: "80px", color: "white", backgroundColor: "#111", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <h1>Overwatch Tac Map</h1>
+    <div style={{ padding: "20px", marginTop: "10px", color: "white", backgroundColor: "#111", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <h1>Tactical Map</h1>
 
       <div style={{ display: "flex", gap: "20px" }}>
         {/* LEFT COLUMN: Controls & Map Area */}
@@ -335,7 +376,7 @@ const TacMap: React.FC = () => {
                 <button onClick={() => setActiveTeam("enemy")} style={{ padding: "8px 12px", background: activeTeam === "enemy" ? "#dc3545" : "#444", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>Enemy ({enemyMarkers.length}/5)</button>
               </div>
               <button onClick={clearCanvas} style={{ padding: "8px 16px", background: "#c4302b", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>Reset Map</button>
-              <button onClick={handleSaveStrategy} disabled={isSaving} style={{ padding: "8px 16px", background: isSaving ? "#666" : "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: isSaving ? "not-allowed" : "pointer", fontWeight: "bold" }}>
+              <button onClick={triggerSaveFlow} disabled={isSaving} style={{ padding: "8px 16px", background: isSaving ? "#666" : "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: isSaving ? "not-allowed" : "pointer", fontWeight: "bold" }}>
                 {isSaving ? "Saving..." : "Save Strategy"}
               </button>
             </div>
@@ -369,7 +410,6 @@ const TacMap: React.FC = () => {
             </div>
           )}
 
-          {/* Interactive Map Surface */}
           <div 
             ref={mapRef} 
             onClick={handleMapClick} 
@@ -398,7 +438,6 @@ const TacMap: React.FC = () => {
 
         {/* RIGHT COLUMN: Description & Hero Selection */}
         <div style={{ width: "300px", background: "#222", padding: "15px", borderRadius: "8px", border: "1px solid #444", height: "fit-content", marginTop: "42px" }}>
-          
           <div style={{ marginBottom: "20px" }}>
             <h4 style={{ margin: "0 0 10px 0", fontSize: "12px", color: "#f65dfb", textTransform: "uppercase", letterSpacing: "1px" }}>Strategy Description</h4>
             <textarea
@@ -428,6 +467,38 @@ const TacMap: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* MODALS */}
+      <CustomModal
+        isOpen={isNameModalOpen}
+        title="Name Your Strategy"
+        onConfirm={finalizeSave}
+        onCancel={() => setIsNameModalOpen(false)}
+        confirmText="Save Strategy"
+      >
+        <input 
+          type="text"
+          value={newStrategyName}
+          onChange={(e) => setNewStrategyName(e.target.value)}
+          placeholder="e.g. King's Row Dive"
+          autoFocus
+          style={{
+            width: "100%", padding: "12px", background: "#0a0a0a",
+            border: "1px solid #e60082", borderRadius: "6px", color: "white",
+            outline: "none", textAlign: "center", fontSize: "16px"
+          }}
+        />
+      </CustomModal>
+
+      <CustomModal
+        isOpen={isConfirmModalOpen}
+        title="Strategy Saved!"
+        onConfirm={() => setIsConfirmModalOpen(false)}
+        showCancel={false}
+        confirmText="Awesome"
+      >
+        <p style={{ color: "#aaa" }}>Your tactical masterpiece is now saved.</p>
+      </CustomModal>
     </div>
   );
 };

@@ -11,12 +11,53 @@ interface SavedStrategy {
   };
 }
 
+// Reusable Modal Component to match TacMap
+const CustomModal: React.FC<{
+  isOpen: boolean;
+  title: string;
+  children?: React.ReactNode;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  confirmColor?: string;
+}> = ({ isOpen, title, children, onConfirm, onCancel, confirmText = "OK", confirmColor = "#e60082" }) => {
+  if (!isOpen) return null;
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", 
+      justifyContent: "center", alignItems: "center", zIndex: 1000,
+      backdropFilter: "blur(4px)"
+    }}>
+      <div style={{
+        background: "#161616", padding: "30px", borderRadius: "12px",
+        border: "1px solid #282828", boxShadow: `0 0 30px ${confirmColor}33`,
+        width: "400px", textAlign: "center"
+      }}>
+        <h3 style={{ color: "#f65dfb", marginBottom: "20px", fontSize: "22px", fontWeight: "750" }}>{title}</h3>
+        <div style={{ marginBottom: "25px", color: "#aaa", fontSize: "14px", lineHeight: "1.5" }}>{children}</div>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          <button onClick={onCancel} style={{
+            background: "transparent", color: "#888", border: "1px solid #444",
+            padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold"
+          }}>Cancel</button>
+          <button onClick={onConfirm} style={{
+            background: confirmColor, color: "white", border: "none",
+            padding: "10px 24px", borderRadius: "6px", cursor: "pointer", 
+            fontWeight: "bold", boxShadow: `0 4px 10px ${confirmColor}4d`
+          }}>{confirmText}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Saves: React.FC = () => {
   const [saves, setSaves] = useState<SavedStrategy[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Grid sizing: 1.5fr (Name) | 1fr (Map) | 1fr (Date) | 1.5fr (Delete)
   const gridLayout = "1.5fr 1fr 1fr 1.5fr"; 
 
   useEffect(() => {
@@ -44,19 +85,20 @@ const Saves: React.FC = () => {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, saveId: string) => {
-    e.stopPropagation();
-    const confirmed = window.confirm("Are you sure you want to delete this save? This action cannot be undone.");
-    if (!confirmed) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
 
     try {
-      await supabase.from("Map_Drawings").delete().eq("save_id", saveId);
-      await supabase.from("Map_Assets").delete().eq("save_id", saveId);
-      const { error } = await supabase.from("Saved_Maps").delete().eq("save_id", saveId);
+      await supabase.from("Map_Drawings").delete().eq("save_id", deleteTarget);
+      await supabase.from("Map_Assets").delete().eq("save_id", deleteTarget);
+      const { error } = await supabase.from("Saved_Maps").delete().eq("save_id", deleteTarget);
       if (error) throw error;
-      setSaves(saves.filter((s) => s.save_id !== saveId));
+      
+      setSaves(saves.filter((s) => s.save_id !== deleteTarget));
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -71,9 +113,25 @@ const Saves: React.FC = () => {
 
         {loading ? (
           <p style={{ color: "#888" }}>Loading your tactics...</p>
+        ) : saves.length === 0 ? (
+          /* Empty State View */
+          <div style={{ 
+            textAlign: "center", padding: "60px", background: "#161616", 
+            borderRadius: "12px", border: "1px solid #282828" 
+          }}>
+            <p style={{ color: "#777", fontSize: "18px", marginBottom: "20px" }}>
+              No saves found. Save a map in the tacmap to start strategizing.
+            </p>
+            <button 
+              onClick={() => navigate('/tacmap')}
+              style={{ background: "#e60082", color: "white", border: "none", padding: "12px 24px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
+            >
+              Go to TacMap
+            </button>
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {/* Header Row */}
+            {/* Header Row - Only shows if there are saves */}
             <div style={{ display: "grid", gridTemplateColumns: gridLayout, padding: "12px 25px", background: "#0a0a0a", borderRadius: "8px", border: "1px solid #222", marginBottom: "5px" }}>
               <div style={{ color: "#555", fontSize: "11px", fontWeight: "bold", letterSpacing: "1px" }}>STRATEGY NAME</div>
               <div style={{ color: "#555", fontSize: "11px", fontWeight: "bold", letterSpacing: "1px" }}>MAP</div>
@@ -98,12 +156,12 @@ const Saves: React.FC = () => {
 
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button
-                    onClick={(e) => handleDelete(e, save.save_id)}
+                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(save.save_id); }}
                     style={{ background: "transparent", color: "#ff4d4d", border: "1px solid #ff4d4d", padding: "6px 14px", borderRadius: "4px", cursor: "pointer", fontSize: "10px", fontWeight: "bold", textTransform: "uppercase" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "#ff4d4d"; e.currentTarget.style.color = "white"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#ff4d4d"; }}
                   >
-                    Remove Save
+                    Delete Save
                   </button>
                 </div>
               </div>
@@ -111,6 +169,18 @@ const Saves: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <CustomModal
+        isOpen={!!deleteTarget}
+        title="Delete Strategy?"
+        confirmText="Delete Forever"
+        confirmColor="#ff4d4d"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      >
+        Are you sure you want to delete this save? This action cannot be undone!
+      </CustomModal>
     </div>
   );
 };

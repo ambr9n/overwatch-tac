@@ -215,7 +215,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
-        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#3b82f6", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
+        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#b608aaff", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
       </div>
       {posts.map((post) => {
         const replyCount = post.Forum_Replies?.length || 0;

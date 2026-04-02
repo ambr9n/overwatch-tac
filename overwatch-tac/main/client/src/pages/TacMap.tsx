@@ -173,8 +173,7 @@ const TacMap: React.FC = () => {
             border: "2px solid #444",
             backgroundColor: "#000",
             // The double quotes around the URL are vital for links with special characters
-            // Change this line temporarily to a link you KNOW works in your browser
-            backgroundImage: `url("https://xxdbxtsuckrwqvoezhk.supabase.co/storage/v1/object/public/Maps/anubis.png")`,
+            backgroundImage: currentMap?.image ? `url("${currentMap.image}")` : "none",
             backgroundSize: "contain", 
             backgroundRepeat: "no-repeat",
             backgroundPosition: "center",

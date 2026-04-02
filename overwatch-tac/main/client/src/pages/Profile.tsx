@@ -38,13 +38,17 @@ export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState("");
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase.from("Users").select("*").eq("user_id", userId).maybeSingle();
-    if (!error && data) setProfile(data);
+    if (!error && data) {
+      setProfile(data);
+      setProfileImageUrl(data.profile_image_link);
+    }
   };
 
   const fetchPosts = async (userId: string) => {
@@ -80,20 +84,11 @@ export default function Profile() {
 
   const isOwnProfile = currentUser?.id === profile?.user_id;
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !profile) return;
-
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${profile.user_id}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
-
-    const { data, error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file, { upsert: true });
-    if (uploadError) return alert("Avatar upload failed: " + uploadError.message);
-
-    const publicUrl = supabase.storage.from("avatars").getPublicUrl(filePath).data.publicUrl;
-    await supabase.from("Users").update({ profile_image_link: publicUrl }).eq("user_id", profile.user_id);
-    setProfile(prev => prev ? { ...prev, profile_image_link: publicUrl } : prev);
+  const handleProfileImageSave = async () => {
+    if (!profileImageUrl.trim() || !profile) return;
+    await supabase.from("Users").update({ profile_image_link: profileImageUrl }).eq("user_id", profile.user_id);
+    setProfile(prev => prev ? { ...prev, profile_image_link: profileImageUrl } : prev);
+    alert("Profile picture updated!");
   };
 
   const handleLogout = async () => {
@@ -184,10 +179,16 @@ export default function Profile() {
               <p style={{ marginLeft: 10, fontSize: 14, color: '#ccc' }}>{profile.email}</p>
             </div>
 
-            {/* Profile Image Upload */}
+            {/* Profile Image URL */}
             <div style={{ marginBottom: 15 }}>
-              <label>Change Profile Picture:</label>
-              <input type="file" accept="image/*" onChange={handleAvatarChange} style={{ marginLeft: 10 }} />
+              <label>Profile Picture URL:</label>
+              <input
+                type="text"
+                value={profileImageUrl}
+                onChange={(e) => setProfileImageUrl(e.target.value)}
+                style={{ marginLeft: 10, width: "calc(100% - 20px)", padding: 6, borderRadius: 4, border: "1px solid #333", background: "#000", color: "white" }}
+              />
+              <button onClick={handleProfileImageSave} style={{ marginLeft: 8, padding: "6px 12px", cursor: "pointer" }}>Save</button>
             </div>
 
             <button onClick={handleLogout} style={{ padding: "6px 12px", background: "#ef4444", color: "white", borderRadius: 6, cursor: "pointer", border: "none" }}>

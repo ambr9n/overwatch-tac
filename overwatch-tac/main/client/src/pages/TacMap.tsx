@@ -87,7 +87,7 @@ const TacMap: React.FC = () => {
   };
 
   const startDrawing = (e: React.MouseEvent) => {
-    if (e.shiftKey) return;
+    if (!currentMap?.image_path || e.shiftKey) return;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const { x, y } = getCanvasCoords(e);
@@ -110,6 +110,8 @@ const TacMap: React.FC = () => {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (!currentMap?.image_path) return;
+    
     const assetData = JSON.parse(e.dataTransfer.getData("assetData"));
     const rect = mapRef.current?.getBoundingClientRect();
     
@@ -133,7 +135,7 @@ const TacMap: React.FC = () => {
   };
 
   const handleMapClick = (e: React.MouseEvent) => {
-    if (!e.shiftKey || !currentMap?.image_path) return;
+    if (!currentMap?.image_path || !e.shiftKey) return;
     const rect = mapRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -242,8 +244,14 @@ const TacMap: React.FC = () => {
             onMouseLeave={() => setIsDrawing(false)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
-            style={{ width: "100%", height: "600px", position: "relative", border: "2px solid #444", backgroundColor: "#000", backgroundImage: currentMap?.image_path ? `url("${currentMap.image_path}")` : "none", backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", borderRadius: "8px", cursor: "crosshair", overflow: "hidden" }}
+            style={{ width: "100%", height: "600px", position: "relative", border: "2px solid #444", backgroundColor: "#000", backgroundImage: currentMap?.image_path ? `url("${currentMap.image_path}")` : "none", backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", borderRadius: "8px", cursor: currentMap?.image_path ? "crosshair" : "not-allowed", overflow: "hidden" }}
           >
+            {!currentMap?.image_path && (
+              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#666", textAlign: "center" }}>
+                <h3 style={{ margin: 0 }}>Select a map to begin</h3>
+                <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>Placement and drawing are disabled until a map is active.</p>
+              </div>
+            )}
             <canvas ref={canvasRef} width={1000} height={600} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 2, pointerEvents: "none" }} />
             {markers.map((m) => (
               <div key={m.id} style={{ position: "absolute", width: "40px", height: "40px", left: m.x - 20, top: m.y - 20, zIndex: 5, pointerEvents: "none" }}>
@@ -275,19 +283,21 @@ const TacMap: React.FC = () => {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", overflowY: "auto" }}>
             {filteredHeroes.map(asset => {
               const isHeroOnCurrentTeam = (activeTeam === "ally" ? allyMarkers : enemyMarkers).some(m => m.heroName === asset.name);
+              const isDisabled = !currentMap?.image_path || isHeroOnCurrentTeam;
+              
               return (
                 <div 
                   key={asset.asset_id} 
-                  draggable={!isHeroOnCurrentTeam}
+                  draggable={!isDisabled}
                   onDragStart={(e) => e.dataTransfer.setData("assetData", JSON.stringify(asset))}
                   style={{ 
-                    cursor: isHeroOnCurrentTeam ? "not-allowed" : "grab", 
+                    cursor: isDisabled ? "not-allowed" : "grab", 
                     textAlign: "center", 
                     padding: "5px", 
                     background: "#333", 
                     borderRadius: "4px", 
                     border: "1px solid #444",
-                    opacity: isHeroOnCurrentTeam ? 0.3 : 1
+                    opacity: isDisabled ? 0.3 : 1
                   }}
                 >
                   <img src={asset.image_path} alt={asset.name} style={{ width: "50px", height: "50px", borderRadius: "4px", backgroundColor: "#000" }} />

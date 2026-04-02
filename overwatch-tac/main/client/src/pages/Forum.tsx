@@ -41,20 +41,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
-
-  if (!currentUser) {
-    return (
-      <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
-        <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
-        <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
-        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#3b82f6", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
-          Log In to Continue
-        </button>
-      </div>
-    );
-  }
-
-  const isMod = ADMIN_USERS.includes(currentUser.id);
+  const [loading, setLoading] = useState(true);
 
   const fetchPosts = async () => {
     const { data, error } = await supabase
@@ -72,10 +59,11 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       .order("created_at", { ascending: false });
 
     if (!error) setPosts((data as any) || []);
+    setLoading(false);
   };
 
   useEffect(() => {
-    const syncProfile = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase.from("Users").select("*").eq("user_id", user.id).maybeSingle();
@@ -86,13 +74,28 @@ export default function Forum({ currentUser }: { currentUser: any }) {
             email: user.email,
             profile_image_link: DEFAULT_AVATAR
           }]);
-          fetchPosts();
         }
       }
+      fetchPosts();
     };
-    syncProfile();
-    fetchPosts();
+    init();
   }, []);
+
+  if (loading) return null;
+
+  if (!currentUser) {
+    return (
+      <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
+        <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
+        <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
+        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#3b82f6", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
+          Log In to Continue
+        </button>
+      </div>
+    );
+  }
+
+  const isMod = ADMIN_USERS.includes(currentUser.id);
 
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Permanent delete? This wipes the post and ALL replies.")) return;

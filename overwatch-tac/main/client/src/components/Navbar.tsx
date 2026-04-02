@@ -5,21 +5,22 @@ import "./Navbar.css";
 
 const Navbar: FC = () => {
   const [user, setUser] = useState<any | null>(null);
-  const [profileData, setProfileData] = useState<{ username: string; profile_image_link: string } | null>(null);
+  const [profileData, setProfileData] = useState<{ username: string; profile_image_link: string; user_id: string } | null>(null);
 
   const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
   const fetchProfileFromDB = async (userId: string) => {
     const { data, error } = await supabase
       .from("Users")
-      .select("username, profile_image_link")
+      .select("username, profile_image_link, user_id")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (!error && data) {
       setProfileData({
         username: data.username,
-        profile_image_link: data.profile_image_link || DEFAULT_AVATAR
+        profile_image_link: data.profile_image_link || DEFAULT_AVATAR,
+        user_id: data.user_id,
       });
     }
   };
@@ -37,7 +38,7 @@ const Navbar: FC = () => {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user || null;
       setUser(currentUser);
-      
+
       if (currentUser) {
         fetchProfileFromDB(currentUser.id);
       } else {
@@ -58,10 +59,10 @@ const Navbar: FC = () => {
       </div>
 
       <div className="nav-right">
-        {user ? (
-          <NavLink to={`/profile`} className="nav-link login profile-link">
+        {user && profileData ? (
+          <NavLink to={`/profile/${profileData.user_id}`} className="nav-link login profile-link">
             <img
-              src={profileData?.profile_image_link || DEFAULT_AVATAR}
+              src={profileData.profile_image_link || DEFAULT_AVATAR}
               alt="Profile"
               style={{
                 width: 32,
@@ -76,7 +77,7 @@ const Navbar: FC = () => {
                 (e.target as HTMLImageElement).src = DEFAULT_AVATAR;
               }}
             />
-            {profileData?.username || "Profile"}
+            {profileData.username || "Profile"}
           </NavLink>
         ) : (
           <>

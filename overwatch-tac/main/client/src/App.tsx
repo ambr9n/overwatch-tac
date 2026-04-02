@@ -11,6 +11,7 @@ import Saves from "./pages/Saves";
 import Auth from "./pages/SignUp";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
+import ProfileRedirect from "./pages/ProfileRedirect";
 import Forum from "./pages/Forum";
 
 const App = () => {
@@ -46,9 +47,11 @@ const App = () => {
               <Route path="/saves" element={<Saves />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/profile/:uid?" element={<Profile />} />
+              {/* Redirect /profile to your own profile */}
+              <Route path="/profile" element={<ProfileRedirect />} />
+              {/* Any user's profile */}
+              <Route path="/profile/:uid" element={<Profile />} />
               <Route path="/forum" element={<Forum currentUser={user} />} />
-              
             </Routes>
           </main>
         </div>

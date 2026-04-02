@@ -25,7 +25,6 @@ interface ForumPost {
   Forum_Replies: ForumReply[];
 }
 
-// MOD LIST
 const ADMIN_USERS = [
   "06dceda7-8a9a-4ed5-8b65-f1a8fb85c528",
   "38750a9c-ad2a-442f-a553-a3116f548c31",
@@ -42,20 +41,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
-
-  if (!currentUser) {
-    return (
-      <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
-        <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
-        <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
-        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#3b82f6", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
-          Log In to Continue
-        </button>
-      </div>
-    );
-  }
-
-  const isMod = ADMIN_USERS.includes(currentUser.id);
+  const [loading, setLoading] = useState(true);
 
   const fetchPosts = async () => {
     const { data, error } = await supabase
@@ -73,10 +59,11 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       .order("created_at", { ascending: false });
 
     if (!error) setPosts((data as any) || []);
+    setLoading(false);
   };
 
   useEffect(() => {
-    const syncProfile = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase.from("Users").select("*").eq("user_id", user.id).maybeSingle();
@@ -87,13 +74,28 @@ export default function Forum({ currentUser }: { currentUser: any }) {
             email: user.email,
             profile_image_link: DEFAULT_AVATAR
           }]);
-          fetchPosts();
         }
       }
+      fetchPosts();
     };
-    syncProfile();
-    fetchPosts();
+    init();
   }, []);
+
+  if (loading) return null;
+
+  if (!currentUser) {
+    return (
+      <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
+        <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
+        <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
+        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#3b82f6", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
+          Log In to Continue
+        </button>
+      </div>
+    );
+  }
+
+  const isMod = ADMIN_USERS.includes(currentUser.id);
 
   const handleDeletePost = async (postId: string) => {
     if (!window.confirm("Permanent delete? This wipes the post and ALL replies.")) return;
@@ -123,7 +125,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   };
 
-  // Updated AuthorHeader with clickable avatar/username
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
       e.currentTarget.src = DEFAULT_AVATAR;
@@ -193,7 +194,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                   onDelete={() => handleDeleteReply(reply.reply_id)}
                 />
                 <div style={{ margin: '14px 0' }}>
-                  <p style={{ fontSize: 14, color: '#ccc', margin: 0 }}>{reply.text}</p>
+                  <p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -215,7 +216,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
-        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#b608aaff", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
+        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#3b82f6", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
       </div>
       {posts.map((post) => {
         const replyCount = post.Forum_Replies?.length || 0;
@@ -225,7 +226,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={canDeletePost} onDelete={() => handleDeletePost(post.post_id)} />
             <div style={{ margin: "18px 0" }}>
-              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0 }}>{post.text}</p>
+              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>

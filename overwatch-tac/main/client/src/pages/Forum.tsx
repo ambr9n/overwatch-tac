@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../Supabase';
+import { NavLink } from 'react-router-dom';
 
 interface ForumReply {
   reply_id: string;
@@ -25,7 +26,14 @@ interface ForumPost {
 }
 
 // MOD LIST
-const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31", "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae", "236ffca1-63de-44f4-bcd4-1772ab2ee94f", "48ce304b-ad93-4b60-a327-427939d7ff34"];
+const ADMIN_USERS = [
+  "06dceda7-8a9a-4ed5-8b65-f1a8fb85c528",
+  "38750a9c-ad2a-442f-a553-a3116f548c31",
+  "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae",
+  "236ffca1-63de-44f4-bcd4-1772ab2ee94f",
+  "48ce304b-ad93-4b60-a327-427939d7ff34"
+];
+
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
 export default function Forum({ currentUser }: { currentUser: any }) {
@@ -115,6 +123,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   };
 
+  // Updated AuthorHeader with clickable avatar/username
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
       e.currentTarget.src = DEFAULT_AVATAR;
@@ -123,15 +132,19 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     return (
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img 
-            src={user?.profile_image_link || DEFAULT_AVATAR} 
-            onError={handleImageError}
-            style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} 
-          />
+          <NavLink to={`/profile/${userId}`}>
+            <img 
+              src={user?.profile_image_link || DEFAULT_AVATAR} 
+              onError={handleImageError}
+              style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} 
+            />
+          </NavLink>
           <div>
             <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
               {ADMIN_USERS.includes(userId) && <span style={{ background: "#ef4444", fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white' }}>MOD</span>}
-              <span style={{ color: 'white' }}>{user?.username}</span>
+              <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>
+                {user?.username}
+              </NavLink>
             </div>
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>

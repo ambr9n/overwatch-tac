@@ -12,6 +12,7 @@ interface ForumReply {
   parent_reply_id?: string;
   Users: { username: string; profile_image_link: string; };
   Reply_Likes: { user_id: string }[];
+  Reply_Dislikes: { user_id: string }[]; // ✅ added
 }
 
 interface ForumPost {
@@ -22,6 +23,7 @@ interface ForumPost {
   is_deleted: boolean;
   Users: { username: string; profile_image_link: string; };
   Post_Likes: { user_id: string }[];
+  Post_Dislikes: { user_id: string }[]; // ✅ added
   Forum_Replies: ForumReply[];
 }
 
@@ -63,11 +65,13 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       .select(`
         post_id, user_id, text, created_at, is_deleted,
         Users (username, profile_image_link),
-        Post_Likes (user_id), 
+        Post_Likes (user_id),
+        Post_Dislikes (user_id), 
         Forum_Replies (
           reply_id, user_id, text, created_at, is_deleted, parent_reply_id,
           Users (username, profile_image_link),
-          Reply_Likes (user_id)
+          Reply_Likes (user_id),
+          Reply_Dislikes (user_id)
         )
       `)
       .order("created_at", { ascending: false });
@@ -116,10 +120,24 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   };
 
+  const handleDislike = async (postId: string) => {
+    const { data: existing } = await supabase.from("Post_Dislikes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
+    if (existing) await supabase.from("Post_Dislikes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
+    else await supabase.from("Post_Dislikes").insert([{ post_id: postId, user_id: currentUser.id }]);
+    fetchPosts();
+  };
+
   const handleReplyLike = async (replyId: string) => {
     const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Likes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
+    fetchPosts();
+  };
+
+  const handleReplyDislike = async (replyId: string) => {
+    const { data: existing } = await supabase.from("Reply_Dislikes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
+    if (existing) await supabase.from("Reply_Dislikes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
+    else await supabase.from("Reply_Dislikes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
     fetchPosts();
   };
 
@@ -180,6 +198,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <div style={{ marginLeft: depth > 0 ? 20 : 0, borderLeft: depth > 0 ? "2px solid #222" : "none", paddingLeft: depth > 0 ? 15 : 0 }}>
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser.id);
+          const isReplyDisliked = reply.Reply_Dislikes?.some(d => d.user_id === currentUser.id);
           const canDeleteReply = (isMod || currentUser.id === reply.user_id);
 
           return (
@@ -198,6 +217,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
                     👍 {reply.Reply_Likes?.length || 0}
+                  </button>
+                  <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
+                    👎 {reply.Reply_Dislikes?.length || 0}
                   </button>
                   <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
                 </div>
@@ -221,6 +243,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
         const replyCount = post.Forum_Replies?.length || 0;
         const isExpanded = expandedPosts[post.post_id];
         const canDeletePost = (isMod || currentUser.id === post.user_id);
+        const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
+
         return (
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={canDeletePost} onDelete={() => handleDeletePost(post.post_id)} />
@@ -230,6 +254,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
                 👍 {post.Post_Likes?.length || 0}
+              </button>
+              <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
+                👎 {post.Post_Dislikes?.length || 0}
               </button>
               <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.9rem' }}>
                   {isExpanded ? 'Hide Replies' : replyCount > 0 ? `See ${replyCount} Replies` : 'Reply'}

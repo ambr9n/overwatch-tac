@@ -25,7 +25,6 @@ interface ForumPost {
   Forum_Replies: ForumReply[];
 }
 
-// MOD LIST
 const ADMIN_USERS = [
   "06dceda7-8a9a-4ed5-8b65-f1a8fb85c528",
   "38750a9c-ad2a-442f-a553-a3116f548c31",
@@ -123,7 +122,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   };
 
-  // Updated AuthorHeader with clickable avatar/username
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
       e.currentTarget.src = DEFAULT_AVATAR;
@@ -193,7 +191,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                   onDelete={() => handleDeleteReply(reply.reply_id)}
                 />
                 <div style={{ margin: '14px 0' }}>
-                  <p style={{ fontSize: 14, color: '#ccc', margin: 0 }}>{reply.text}</p>
+                  <p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -225,7 +223,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={canDeletePost} onDelete={() => handleDeletePost(post.post_id)} />
             <div style={{ margin: "18px 0" }}>
-              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0 }}>{post.text}</p>
+              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>

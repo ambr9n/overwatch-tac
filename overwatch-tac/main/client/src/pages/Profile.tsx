@@ -55,7 +55,7 @@ export default function Profile() {
     const { data, error } = await supabase
       .from("Forum_Posts")
       .select(`
-        post_id, text, created_at,
+        post_id, text, created_at, user_id,
         Users (username, profile_image_link),
         Post_Likes (user_id),
         Forum_Replies (
@@ -66,7 +66,9 @@ export default function Profile() {
       `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
-    if (!error) setPosts(data as ForumPost[]);
+    
+    // Fixed the TS error using a double assertion here
+    if (!error) setPosts(data as unknown as ForumPost[]);
   };
 
   useEffect(() => {
@@ -161,7 +163,7 @@ export default function Profile() {
     <div style={{ maxWidth: 800, margin: "60px auto", padding: 20, color: "white", fontFamily: 'sans-serif' }}>
       {/* Header */}
       <div style={{ display: "flex", gap: 20, alignItems: "center", marginBottom: 30 }}>
-        <img src={profile.profile_image_link || DEFAULT_AVATAR} onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)} alt="Profile" style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover" }} />
+        <img src={profile.profile_image_link || DEFAULT_AVATAR} alt="Profile" style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover" }} />
         <h2>{profile.username}</h2>
         {isOwnProfile && <button onClick={() => setShowSettings(true)} style={{ marginLeft: "auto", padding: "6px 12px", cursor: "pointer" }}>Settings ⚙️</button>}
       </div>
@@ -173,11 +175,13 @@ export default function Profile() {
             <h3 style={{ marginBottom: 20 }}>Profile Settings</h3>
             <button onClick={() => setShowSettings(false)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", color: "#aaa", fontSize: 18, cursor: "pointer" }}>✖️</button>
 
+            {/* Read-only Email */}
             <div style={{ marginBottom: 15 }}>
               <label>Email:</label>
               <p style={{ marginLeft: 10, fontSize: 14, color: '#ccc' }}>{profile.email}</p>
             </div>
 
+            {/* Profile Image URL */}
             <div style={{ marginBottom: 15 }}>
               <label>Profile Picture URL:</label>
               <input
@@ -217,10 +221,12 @@ export default function Profile() {
               </button>
             </div>
 
+            {/* Replies */}
             {isExpanded && (
               <div style={{ marginTop: 10 }}>
                 <RenderReplies allReplies={post.Forum_Replies || []} parentId={null} postId={post.post_id} />
 
+                {/* Reply Input */}
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   <input
                     type="text"

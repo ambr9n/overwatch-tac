@@ -25,7 +25,7 @@ interface ForumPost {
 }
 
 // MOD LIST
-const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31", "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae", "236ffca1-63de-44f4-bcd4-1772ab2ee94f"];
+const ADMIN_USERS = ["06dceda7-8a9a-4ed5-8b65-f1a8fb85c528", "38750a9c-ad2a-442f-a553-a3116f548c31", "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae", "236ffca1-63de-44f4-bcd4-1772ab2ee94f", "48ce304b-ad93-4b60-a327-427939d7ff34"];
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
 export default function Forum({ currentUser }: { currentUser: any }) {
@@ -37,7 +37,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
 
   if (!currentUser) {
     return (
-      <div style={{ maxWidth: 850, margin: "100px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
+      <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
         <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
         <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
         <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#3b82f6", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
@@ -198,7 +198,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   };
 
   return (
-    <div style={{ maxWidth: 850, margin: "0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable' } as any}>
+    <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable' } as any}>
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />

@@ -109,6 +109,7 @@ const TacMap: React.FC = () => {
   // Modal States
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -220,7 +221,7 @@ const TacMap: React.FC = () => {
   };
 
   const startDrawing = (e: React.MouseEvent) => {
-    if (e.shiftKey || !currentMap) return; // FIX: Prevent drawing without a map
+    if (e.shiftKey || !currentMap) return; 
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const { x, y } = getCanvasCoords(e);
@@ -243,7 +244,7 @@ const TacMap: React.FC = () => {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!currentMap) return; // FIX: Prevent dropping assets without a map
+    if (!currentMap) return; 
     const assetData = JSON.parse(e.dataTransfer.getData("assetData"));
     const rect = mapRef.current?.getBoundingClientRect();
     
@@ -264,7 +265,7 @@ const TacMap: React.FC = () => {
   };
 
   const handleMapClick = (e: React.MouseEvent) => {
-    if (!e.shiftKey || !currentMap?.image_path) return; // FIX: Already gated by currentMap check
+    if (!e.shiftKey || !currentMap?.image_path) return; 
     const rect = mapRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -286,11 +287,9 @@ const TacMap: React.FC = () => {
     ctx?.clearRect(0, 0, canvasRef.current?.width || 0, canvasRef.current?.height || 0);
     setMarkers([]);
     setDescription("");
+    setIsResetModalOpen(false);
   };
 
-  /**
-   * SAVE STRATEGY FLOW
-   */
   const triggerSaveFlow = () => {
     if (!currentMap) return alert("Please select a map before saving.");
     setIsNameModalOpen(true);
@@ -367,7 +366,6 @@ const TacMap: React.FC = () => {
       <h1>Tactical Map</h1>
 
       <div style={{ display: "flex", gap: "20px" }}>
-        {/* LEFT COLUMN: Controls & Map Area */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "10px" }}>
@@ -376,7 +374,7 @@ const TacMap: React.FC = () => {
                 <button onClick={() => setActiveTeam("ally")} style={{ padding: "8px 12px", background: activeTeam === "ally" ? "#007bff" : "#444", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>Ally ({allyMarkers.length}/5)</button>
                 <button onClick={() => setActiveTeam("enemy")} style={{ padding: "8px 12px", background: activeTeam === "enemy" ? "#dc3545" : "#444", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>Enemy ({enemyMarkers.length}/5)</button>
               </div>
-              <button onClick={clearCanvas} style={{ padding: "8px 16px", background: "#c4302b", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>Reset Map</button>
+              <button onClick={() => setIsResetModalOpen(true)} style={{ padding: "8px 16px", background: "#c4302b", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>Reset Map</button>
               <button onClick={triggerSaveFlow} disabled={isSaving} style={{ padding: "8px 16px", background: isSaving ? "#666" : "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: isSaving ? "not-allowed" : "pointer", fontWeight: "bold" }}>
                 {isSaving ? "Saving..." : "Save Strategy"}
               </button>
@@ -389,7 +387,6 @@ const TacMap: React.FC = () => {
             )}
           </div>
 
-          {/* Map Selection Accordion */}
           {showMapSelection && (
             <div style={{ background: "#222", padding: "15px", borderRadius: "8px", marginBottom: "20px", border: "1px solid #333" }}>
               <div style={{ marginBottom: "15px" }}>
@@ -437,7 +434,6 @@ const TacMap: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Description & Hero Selection */}
         <div style={{ width: "300px", background: "#222", padding: "15px", borderRadius: "8px", border: "1px solid #444", height: "fit-content", marginTop: "42px" }}>
           <div style={{ marginBottom: "20px" }}>
             <h4 style={{ margin: "0 0 10px 0", fontSize: "12px", color: "#f65dfb", textTransform: "uppercase", letterSpacing: "1px" }}>Strategy Description</h4>
@@ -469,7 +465,6 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {/* MODALS */}
       <CustomModal
         isOpen={isNameModalOpen}
         title="Name Your Strategy"
@@ -499,6 +494,16 @@ const TacMap: React.FC = () => {
         confirmText="Awesome"
       >
         <p style={{ color: "#aaa" }}>Your tactical masterpiece is now saved.</p>
+      </CustomModal>
+
+      <CustomModal
+        isOpen={isResetModalOpen}
+        title="Reset Map?"
+        onConfirm={clearCanvas}
+        onCancel={() => setIsResetModalOpen(false)}
+        confirmText="Clear Everything"
+      >
+        <p style={{ color: "#aaa" }}>This will remove all markers, drawings, and descriptions. Are you sure?</p>
       </CustomModal>
     </div>
   );

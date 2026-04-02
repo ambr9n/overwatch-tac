@@ -4,7 +4,6 @@ import { supabase } from "../Supabase";
 
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
-// MOD LIST (Synced with forum.tsx)
 const ADMIN_USERS = [
   "06dceda7-8a9a-4ed5-8b65-f1a8fb85c528",
   "38750a9c-ad2a-442f-a553-a3116f548c31",
@@ -190,7 +189,7 @@ export default function Profile() {
                   onDelete={() => handleDeleteReply(reply.reply_id)} 
                 />
                 <div style={{ margin: '14px 0' }}>
-                  <p style={{ fontSize: 14, color: '#ccc', margin: 0 }}>{reply.text}</p>
+                  <p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isLiked ? "#3b82f633" : "#222", border: isLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -211,7 +210,6 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 850, margin: "80px auto", padding: "20px", color: "white", fontFamily: 'sans-serif' }}>
-      {/* Profile Header */}
       <div style={{ display: "flex", gap: 20, alignItems: "center", marginBottom: 40 }}>
         <img src={profile.profile_image_link || DEFAULT_AVATAR} alt="Profile" style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover", border: "2px solid #1a1a1a" }} />
         <div>
@@ -221,7 +219,6 @@ export default function Profile() {
         {isOwnProfile && <button onClick={() => setShowSettings(true)} style={{ marginLeft: "auto", padding: "8px 16px", borderRadius: 8, background: "#1a1a1a", border: "1px solid #333", color: "white", cursor: "pointer" }}>Settings ⚙️</button>}
       </div>
 
-      {/* Settings Modal */}
       {showSettings && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
           <div style={{ background: "#0a0a0a", padding: 30, borderRadius: 16, width: 400, position: "relative", border: "1px solid #1a1a1a" }}>
@@ -248,7 +245,6 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Posts Section */}
       <h3 style={{ marginBottom: 20, borderBottom: '1px solid #1a1a1a', paddingBottom: 10 }}>{isOwnProfile ? "Your Activity" : `${profile.username}'s Activity`}</h3>
       {posts.length === 0 && <p style={{ color: "#888" }}>No posts yet.</p>}
       
@@ -268,7 +264,7 @@ export default function Profile() {
               onDelete={() => handleDeletePost(post.post_id)} 
             />
             <div style={{ margin: "18px 0" }}>
-              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0 }}>{post.text}</p>
+              <p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -282,8 +278,6 @@ export default function Profile() {
             {isExpanded && (
               <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
                 <RenderReplies allReplies={post.Forum_Replies || []} parentId={null} postId={post.post_id} />
-
-                {/* Reply Input Area */}
                 <div style={{ marginTop: 15 }}>
                   {replyingTo?.postId === post.post_id && (
                     <div style={{ fontSize: 12, color: '#3b82f6', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>

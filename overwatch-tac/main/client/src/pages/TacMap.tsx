@@ -220,7 +220,7 @@ const TacMap: React.FC = () => {
   };
 
   const startDrawing = (e: React.MouseEvent) => {
-    if (e.shiftKey) return; 
+    if (e.shiftKey || !currentMap) return; // FIX: Prevent drawing without a map
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const { x, y } = getCanvasCoords(e);
@@ -243,6 +243,7 @@ const TacMap: React.FC = () => {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    if (!currentMap) return; // FIX: Prevent dropping assets without a map
     const assetData = JSON.parse(e.dataTransfer.getData("assetData"));
     const rect = mapRef.current?.getBoundingClientRect();
     
@@ -263,7 +264,7 @@ const TacMap: React.FC = () => {
   };
 
   const handleMapClick = (e: React.MouseEvent) => {
-    if (!e.shiftKey || !currentMap?.image_path) return;
+    if (!e.shiftKey || !currentMap?.image_path) return; // FIX: Already gated by currentMap check
     const rect = mapRef.current?.getBoundingClientRect();
     if (!rect) return;
 

@@ -89,7 +89,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
   
-  // 1. CHANGED DEFAULT TAB TO 'all'
   const [activeTab, setActiveTab] = useState<'all' | 'following' | 'algorithmic'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
 
@@ -178,7 +177,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
         <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
         <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
-        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#3b82f6", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
+        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#dd65fb", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
           Log In to Continue
         </button>
       </div>
@@ -269,9 +268,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                 <AuthorHeader user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} showDelete={canDeleteReply} onDelete={() => setDeleteModal({ isOpen: true, type: 'reply', id: reply.reply_id })} />
                 <div style={{ margin: '14px 0' }}><p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p></div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
+                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#dd65fb33" : "#222", border: isReplyLiked ? "1px solid #dd65fb" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
                   <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
-                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: replyUserData?.username || "user" })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
+                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: replyUserData?.username || "user" })} style={{ background: 'none', border: 'none', color: '#dd65fb', cursor: 'pointer', fontSize: 12 }}>Reply</button>
                 </div>
               </div>
               <RenderReplies allReplies={allReplies} parentId={reply.reply_id} postId={postId} depth={depth + 1} />
@@ -315,7 +314,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
 
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
-        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(255, 83, 206, 1)", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
+        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(221, 101, 251, 1)", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
       </div>
 
       <CustomModal isOpen={deleteModal.isOpen} title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} confirmText="Delete Forever" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>
@@ -329,30 +328,29 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       ) : (
         posts.map((post) => {
           const isExpanded = expandedPosts[post.post_id];
+          const isLiked = post.Post_Likes?.some(l => l.user_id === currentUser.id);
           const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
           return (
             <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
               <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || currentUser.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
               <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p></div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
-                <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
+                <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #dd65fb" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
+                <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
                 <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#dd65fbff', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
-                
-                {/* 2. RANK SCORE DISPLAY REMOVED FROM HERE */}
               </div>
               {isExpanded && (
                 <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
                   <RenderReplies allReplies={post.Forum_Replies || []} parentId={null} postId={post.post_id} />
                   <div style={{ marginTop: 15 }}>
-                    {replyingTo?.postId === post.post_id && <div style={{ fontSize: 12, color: '#3b82f6', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}><span>Replying to @{replyingTo.username}</span><button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>Cancel</button></div>}
+                    {replyingTo?.postId === post.post_id && <div style={{ fontSize: 12, color: '#dd65fb', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}><span>Replying to @{replyingTo.username}</span><button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>Cancel</button></div>}
                     <div style={{ display: "flex", gap: 8 }}>
                       <input type="text" placeholder="Write a reply..." value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid #222", background: "#000", color: "white" }} />
                       <button onClick={() => {
                         const payload: any = { post_id: post.post_id, user_id: currentUser.id, text: replyText[post.post_id] };
                         if (replyingTo?.postId === post.post_id) payload.parent_reply_id = replyingTo.replyId;
                         supabase.from("Forum_Replies").insert([payload]).then(() => { setReplyText({...replyText, [post.post_id]: ""}); setReplyingTo(null); fetchPosts(); });
-                      }} style={{ background: "#3b82f6", color: "white", padding: "8px 18px", borderRadius: "8px", border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Reply</button>
+                      }} style={{ background: "#dd65fb", color: "white", padding: "8px 18px", borderRadius: "8px", border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Reply</button>
                     </div>
                   </div>
                 </div>

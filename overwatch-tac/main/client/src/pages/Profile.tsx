@@ -34,6 +34,7 @@ interface UserProfile {
   username: string;
   email?: string;
   profile_image_link: string;
+  bio?: string;
 }
 
 export default function Profile() {
@@ -43,6 +44,7 @@ export default function Profile() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [bio, setBio] = useState("");
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
@@ -78,7 +80,6 @@ export default function Profile() {
     }
   };
 
-  // FIXED: Explicit mapping for aliased joins
   const fetchFollowersList = async (userId: string) => {
     const { data } = await supabase
       .from("User_Follows")
@@ -88,7 +89,6 @@ export default function Profile() {
     setShowFollowersModal(true);
   };
 
-  // FIXED: Explicit mapping for aliased joins
   const fetchFollowingList = async (userId: string) => {
     const { data } = await supabase
       .from("User_Follows")
@@ -103,6 +103,7 @@ export default function Profile() {
     if (!error && data) {
       setProfile(data);
       setProfileImageUrl(data.profile_image_link || "");
+      setBio(data.bio || "");
     }
     await fetchFollowData(userId, currentUserId);
   };
@@ -159,11 +160,18 @@ export default function Profile() {
     }
   };
 
-  const handleUpdateAvatar = async () => {
+  const handleUpdateProfile = async () => {
     if (!profile) return;
-    const { error } = await supabase.from("Users").update({ profile_image_link: profileImageUrl }).eq("user_id", profile.user_id);
+    const { error } = await supabase
+      .from("Users")
+      .update({ 
+        profile_image_link: profileImageUrl,
+        bio: bio 
+      })
+      .eq("user_id", profile.user_id);
+
     if (!error) {
-      setProfile({ ...profile, profile_image_link: profileImageUrl });
+      setProfile({ ...profile, profile_image_link: profileImageUrl, bio: bio });
       setShowSettings(false);
       alert("Profile updated!");
     }
@@ -227,7 +235,6 @@ export default function Profile() {
           return (
             <div key={reply.reply_id} style={{ marginTop: 12, background: "#111", padding: 14, borderRadius: 12, border: "1px solid #222" }}>
               <AuthorHeader user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} />
-              {/* FIXED: Text Overflow */}
               <p style={{ fontSize: 14, color: "#ccc", margin: "8px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", reply.reply_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", reply.reply_id).eq("user_id", currentUser.id); else await supabase.from("Reply_Likes").insert([{ reply_id: reply.reply_id, user_id: currentUser.id }]); fetchPosts(profile!.user_id); }} style={{ background: isLiked ? "#3b82f633" : "#222", color: "white", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}>👍 {reply.Reply_Likes.length}</button>
@@ -246,8 +253,8 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 850, margin: "80px auto", padding: 20, color: "white", fontFamily: "sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 30 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 30 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
           <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover", border: "2px solid #333" }} alt="Avatar" />
           <div>
             <h2 style={{ margin: 0 }}>{profile.username}</h2>
@@ -255,6 +262,11 @@ export default function Profile() {
               <span onClick={() => fetchFollowersList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#3b82f6" }}>{followerCount}</strong> Followers</span>
               <span onClick={() => fetchFollowingList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#3b82f6" }}>{followingCount}</strong> Following</span>
             </div>
+            {profile.bio && (
+              <p style={{ marginTop: 12, color: "#aaa", fontSize: 14, maxWidth: 500, lineHeight: "1.4", whiteSpace: "pre-wrap" }}>
+                {profile.bio}
+              </p>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -278,8 +290,12 @@ export default function Profile() {
               <label style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Profile Image URL</label>
               <input type="text" value={profileImageUrl} onChange={(e) => setProfileImageUrl(e.target.value)} style={{ width: "100%", padding: 10, marginTop: 4, borderRadius: 6, border: "1px solid #333", background: "#000", color: "white", boxSizing: "border-box" }} />
             </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Bio</label>
+              <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." style={{ width: "100%", padding: 10, marginTop: 4, borderRadius: 6, border: "1px solid #333", background: "#000", color: "white", boxSizing: "border-box", minHeight: 80, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={handleUpdateAvatar} style={{ flex: 1, padding: 10, background: "#3b82f6", border: "none", color: "white", borderRadius: 6, cursor: "pointer", fontWeight: "bold" }}>Save Changes</button>
+              <button onClick={handleUpdateProfile} style={{ flex: 1, padding: 10, background: "#3b82f6", border: "none", color: "white", borderRadius: 6, cursor: "pointer", fontWeight: "bold" }}>Save Changes</button>
               <button onClick={() => setShowSettings(false)} style={{ flex: 1, padding: 10, background: "#333", border: "none", color: "white", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
             </div>
             <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid #222" }} />
@@ -294,7 +310,6 @@ export default function Profile() {
         return (
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} />
-            {/* FIXED: Text Overflow */}
             <p style={{ fontSize: 16, color: "#ddd", margin: "14px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", post.post_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Post_Likes").delete().eq("post_id", post.post_id).eq("user_id", currentUser.id); else await supabase.from("Post_Likes").insert([{ post_id: post.post_id, user_id: currentUser.id }]); fetchPosts(profile.user_id); }} style={{ background: isLiked ? "#3b82f633" : "#1a1a1a", color: "white", padding: "6px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}>👍 {post.Post_Likes.length}</button>

@@ -124,7 +124,7 @@ const ToolButton: React.FC<ToolButtonProps> = ({ name, icon, activeTool, onClick
   );
 };
 
-const gameModes: GameMode[] = ["Hybrid", "Escort", "Control", "Push", "Flashpoint", "Assault", "Clash"];
+const gameModes: GameMode[] = ["Hybrid", "Escort", "Control", "Push", "Flashpoint", "Clash", "Assault"];
 const roles = ["Damage", "Support", "Tank"];
 
 const TacMap: React.FC = () => {
@@ -238,6 +238,7 @@ const TacMap: React.FC = () => {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore keybinds if the user is typing in a text field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -245,20 +246,24 @@ const TacMap: React.FC = () => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const modifier = isMac ? e.metaKey : e.ctrlKey;
 
+      // Undo: Ctrl/Cmd + Z
       if (modifier && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
       }
+      // Redo: Ctrl + Y or Ctrl/Cmd + Shift + Z
       else if ((modifier && e.key.toLowerCase() === 'y') || (modifier && e.shiftKey && e.key.toLowerCase() === 'z')) {
         e.preventDefault();
         handleRedo();
       }
+      // Delete: Delete or Backspace
       else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedElement) {
           e.preventDefault();
           deleteSelectedElement();
         }
       }
+      // Tool Quick-Keys
       else if (!modifier && selectedMap) {
         switch (e.key.toLowerCase()) {
           case 's': setActiveTool('select'); break;
@@ -319,6 +324,7 @@ const TacMap: React.FC = () => {
         setSelectedMap(save.Maps.name);
         setDescription(save.description || ""); 
         setSidebarOpen(false);
+
         const { data: assets } = await supabase.from("Map_Assets").select("*").eq("save_id", id);
         let loadedMarkers: Marker[] = [];
         if (assets) {
@@ -349,6 +355,7 @@ const TacMap: React.FC = () => {
           }
         }
 
+        // Initialize history with loaded state
         setHistory([{ markers: loadedMarkers, drawings: loadedDrawings }]);
         setHistoryIndex(0);
       }
@@ -598,9 +605,11 @@ const TacMap: React.FC = () => {
 
   const handleMouseUp = () => {
     if (isDrawing && activeTool === "pen") {
+      // Finalized pen stroke, save to history
       pushToHistory(markers, drawings);
     }
     if (isDraggingElement && selectedElement?.type === "marker") {
+      // Finalized marker move, save to history
       pushToHistory(markers, drawings);
     }
     setIsDrawing(false);
@@ -611,8 +620,11 @@ const TacMap: React.FC = () => {
 
   return (
     <div style={{ 
-      color: "white", backgroundColor: "#111", position: "fixed", top: 0, left: 0,
-      height: "100vh", width: "100vw", display: "flex", overflow: "hidden", zIndex: 50 
+      color: "white", backgroundColor: "#111", position: "fixed", 
+      top: "60px", 
+      left: 0,
+      height: "calc(100vh - 60px)", 
+      width: "100vw", display: "flex", overflow: "hidden", zIndex: 50 
     }}>
       
       {/* LEFT SIDEBAR (Controls & Map Selection) */}
@@ -623,7 +635,10 @@ const TacMap: React.FC = () => {
         overflowX: "hidden", transition: "width 0.3s ease, padding 0.3s ease", flexShrink: 0
       }}>
         <div style={{ minWidth: "310px" }}>
-          <h1 style={{ fontSize: "24px", marginBottom: "20px", color: "#f65dfb" }}>Tactical Map</h1>
+          {/* Replaced 'Tactical Map' heading with the Map Readout */}
+          <div style={{ fontSize: "20px", marginBottom: "20px", fontWeight: "bold" }}>
+            Map: <span style={{ color: "#f65dfb" }}>{selectedMap || "None Selected"}</span>
+          </div>
           
           <button 
             onClick={() => setIsMapSelectorOpen(true)}
@@ -641,27 +656,10 @@ const TacMap: React.FC = () => {
             Select Map
           </button>
 
-          {/* ACTION BUTTONS: Now displayed as row and aligned nicely */}
-          <div style={{ 
-            display: "flex", 
-            gap: "10px", 
-            marginBottom: "15px", 
-            opacity: selectedMap ? 1 : 0.5, 
-            pointerEvents: selectedMap ? "auto" : "none" 
-          }}>
-            <button 
-              onClick={() => setIsResetModalOpen(true)} 
-              style={{ flex: 1, padding: "10px", background: "transparent", border: "1px solid #c4302b", borderRadius: "4px", color: "#c4302b", cursor: "pointer", fontWeight: "bold", fontSize: "13px" }}
-            >
-              Reset Map
-            </button>
-            <button 
-              onClick={() => (activeSaveId ? finalizeSave() : setIsNameModalOpen(true))} 
-              disabled={isSaving || !selectedMap} 
-              style={{ flex: 1, padding: "10px", background: (isSaving || !selectedMap) ? "#444" : "#28a745", border: "none", borderRadius: "4px", color: "white", cursor: selectedMap ? "pointer" : "not-allowed", fontWeight: "bold", fontSize: "13px" }}
-            >
-              {isSaving ? "Saving..." : activeSaveId ? "Update Plan" : "Save Plan"}
-            </button>
+          {/* ACTION BUTTONS */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "15px", opacity: selectedMap ? 1 : 0.5, pointerEvents: selectedMap ? "auto" : "none" }}>
+            <button onClick={() => setIsResetModalOpen(true)} style={{ flex: 1, padding: "10px", background: "transparent", border: "1px solid #c4302b", borderRadius: "4px", color: "#c4302b", cursor: "pointer", fontWeight: "bold", fontSize: "13px" }}>Reset Map</button>
+            <button onClick={() => (activeSaveId ? finalizeSave() : setIsNameModalOpen(true))} disabled={isSaving || !selectedMap} style={{ flex: 1, padding: "10px", background: (isSaving || !selectedMap) ? "#444" : "#28a745", border: "none", borderRadius: "4px", color: "white", cursor: selectedMap ? "pointer" : "not-allowed", fontWeight: "bold", fontSize: "13px" }}>{isSaving ? "Saving..." : activeSaveId ? "Update Plan" : "Save Plan"}</button>
           </div>
 
           <div style={{ background: "#222", padding: "15px", borderRadius: "8px", border: "1px solid #444", marginBottom: "20px", opacity: selectedMap ? 1 : 0.5, pointerEvents: selectedMap ? "auto" : "none" }}>
@@ -669,7 +667,8 @@ const TacMap: React.FC = () => {
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: "100%", height: "60px", background: "#111", color: "white", border: "1px solid #444", borderRadius: "4px", padding: "10px", resize: "none" }} />
           </div>
 
-          <div style={{ background: "#222", padding: "15px", borderRadius: "8px", border: "1px solid #444", opacity: selectedMap ? 1 : 0.5, pointerEvents: selectedMap ? "auto" : "none", display: "flex", flexDirection: "column", maxHeight: "380px" }}>
+          <div style={{ background: "#222", padding: "15px", borderRadius: "8px", border: "1px solid #444", 
+            opacity: selectedMap ? 1 : 0.5, pointerEvents: selectedMap ? "auto" : "none", display: "flex", flexDirection: "column", maxHeight: "380px" }}>
             <h4 style={{ color: "#f65dfb", fontSize: "12px", textTransform: "uppercase", marginBottom: "10px" }}>Team Selection</h4>
             <div style={{ display: "flex", gap: "10px", padding: "5px", background: "#111", borderRadius: "6px", marginBottom: "15px" }}>
               <button onClick={() => setActiveTeam("ally")} style={{ flex: 1, padding: "8px 12px", background: activeTeam === "ally" ? "#007bff" : "transparent", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>Ally ({allyMarkers.length})</button>
@@ -696,18 +695,18 @@ const TacMap: React.FC = () => {
       {/* RIGHT MAIN AREA */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#0a0a0a", position: "relative", minWidth: 0, justifyContent: "center", alignItems: "center" }}>
         
-        {/* LEFT SIDEBAR TOGGLE BUTTON: Aligned perfectly near the top as seen in your crop */}
+        {/* LEFT SIDEBAR TOGGLE BUTTON */}
         <button 
           onClick={() => setSidebarOpen(!sidebarOpen)} 
           style={{ 
             position: "absolute", 
-            top: "14px", 
-            left: sidebarOpen ? "14px" : "10px", 
+            top: "20px", 
+            left: "10px", 
             zIndex: 15, 
             background: "rgba(230, 0, 130, 0.8)", 
             border: "none", 
             color: "white", 
-            borderRadius: "6px", 
+            borderRadius: "4px", 
             width: "36px", 
             height: "36px", 
             cursor: "pointer", 
@@ -723,9 +722,6 @@ const TacMap: React.FC = () => {
         >
           {sidebarOpen ? "«" : "»"}
         </button>
-
-        {/* Current Map Readout */}
-        <div style={{ position: "absolute", top: "20px", left: sidebarOpen ? "60px" : "60px", zIndex: 14, background: "rgba(17, 17, 17, 0.85)", padding: "8px 15px", borderRadius: "4px", border: "1px solid #282828", fontSize: "13px", fontWeight: "bold" }}>Map: <span style={{ color: "#f65dfb" }}>{selectedMap || "None Selected"}</span></div>
 
         {/* MAP & CANVAS HUB */}
         <div ref={mapRef} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} onClick={handleMapClick} style={{ width: "100%", height: "100%", position: "relative", backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#050505", cursor: selectedMap ? "default" : "not-allowed", opacity: selectedMap ? 1 : 0.6, aspectRatio: "1000 / 600", maxHeight: "100%", maxWidth: "100%", margin: "auto" }}>

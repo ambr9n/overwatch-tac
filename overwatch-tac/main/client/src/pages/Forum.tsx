@@ -4,7 +4,6 @@ import { NavLink } from 'react-router-dom';
 
 /**
  * CUSTOM MODAL COMPONENT
- * Styled to match the site's dark/purple theme.
  */
 const CustomModal: React.FC<{
   isOpen: boolean;
@@ -54,9 +53,9 @@ interface ForumReply {
   created_at: string;
   is_deleted: boolean;
   parent_reply_id?: string;
-  Users: { username: string; profile_image_link: string; };
+  Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
   Reply_Likes: { user_id: string }[];
-  Reply_Dislikes: { user_id: string }[]; // ✅ added
+  Reply_Dislikes: { user_id: string }[];
 }
 
 interface ForumPost {
@@ -65,10 +64,11 @@ interface ForumPost {
   text: string;
   created_at: string;
   is_deleted: boolean;
-  Users: { username: string; profile_image_link: string; };
+  Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
   Post_Likes: { user_id: string }[];
-  Post_Dislikes: { user_id: string }[]; // ✅ added
+  Post_Dislikes: { user_id: string }[];
   Forum_Replies: ForumReply[];
+  score?: number; 
 }
 
 const ADMIN_USERS = [
@@ -88,14 +88,27 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'all' | 'following'>('all');
+  
+  // 1. CHANGED DEFAULT TAB TO 'all'
+  const [activeTab, setActiveTab] = useState<'all' | 'following' | 'algorithmic'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
 
-  // States for custom delete modal
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
     isOpen: false,
     type: 'post',
     id: null
   });
+
+  const calculateAlgorithmicScore = (post: ForumPost) => {
+    const likes = post.Post_Likes?.length || 0;
+    const dislikes = post.Post_Dislikes?.length || 0;
+    const replies = post.Forum_Replies?.length || 0;
+    const engagement = (likes * 1) + (replies * 3) - (dislikes * 1);
+    const postDate = new Date(post.created_at).getTime();
+    const now = new Date().getTime();
+    const hoursSincePosted = Math.max(1, (now - postDate) / (1000 * 60 * 60));
+    return engagement / Math.pow((hoursSincePosted + 2), 1.5);
+  };
 
   const fetchPosts = async () => {
     let query = supabase
@@ -111,8 +124,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
           Reply_Likes (user_id),
           Reply_Dislikes (user_id)
         )
-      `)
-      .order("created_at", { ascending: false });
+      `);
 
     if (activeTab === 'following' && currentUser) {
       const { data: followingData } = await supabase
@@ -126,28 +138,38 @@ export default function Forum({ currentUser }: { currentUser: any }) {
 
     const { data, error } = await query;
 
-    if (!error) setPosts((data as any) || []);
+    if (!error && data) {
+      let processedData = (data as unknown as ForumPost[]).map(post => ({
+        ...post,
+        score: calculateAlgorithmicScore(post)
+      }));
+      
+      if (activeTab === 'algorithmic') {
+        processedData.sort((a, b) => (b.score || 0) - (a.score || 0));
+      } else {
+        if (sortBy === 'newest') {
+          processedData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        } else if (sortBy === 'popular') {
+          processedData.sort((a, b) => {
+            const scoreA = (a.Post_Likes?.length || 0) - (a.Post_Dislikes?.length || 0);
+            const scoreB = (b.Post_Likes?.length || 0) - (b.Post_Dislikes?.length || 0);
+            return scoreB - scoreA;
+          });
+        }
+      }
+      setPosts(processedData);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase.from("Users").select("*").eq("user_id", user.id).maybeSingle();
-        if (!profile) {
-          await supabase.from("Users").insert([{
-            user_id: user.id,
-            username: user.user_metadata.username || "User_" + user.id.slice(0, 5),
-            email: user.email,
-            profile_image_link: DEFAULT_AVATAR
-          }]);
-        }
-      }
-      fetchPosts();
-    };
-    init();
-  }, [activeTab]);
+    fetchPosts();
+  }, [activeTab, sortBy]);
+
+  const getUserData = (userField: any) => {
+    if (Array.isArray(userField)) return userField[0];
+    return userField;
+  };
 
   if (loading) return null;
 
@@ -165,10 +187,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
 
   const isMod = ADMIN_USERS.includes(currentUser.id);
 
-  // New confirmation handler for the custom modal
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
-    
     if (deleteModal.type === 'post') {
       const { error } = await supabase.from("Forum_Posts").delete().eq("post_id", deleteModal.id);
       if (error) alert(`Delete failed: ${error.message}`);
@@ -178,7 +198,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
       if (error) alert(`Delete failed: ${error.message}`);
       else fetchPosts();
     }
-    
     setDeleteModal({ isOpen: false, type: 'post', id: null });
   };
 
@@ -210,51 +229,26 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   };
 
-  // Updated AuthorHeader with clickable avatar/username
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
       e.currentTarget.src = DEFAULT_AVATAR;
     };
-
+    const userData = getUserData(user);
     return (
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <NavLink to={`/profile/${userId}`}>
-            <img 
-              src={user?.profile_image_link || DEFAULT_AVATAR} 
-              onError={handleImageError}
-              style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} 
-            />
+            <img src={userData?.profile_image_link || DEFAULT_AVATAR} onError={handleImageError} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} />
           </NavLink>
           <div>
             <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
               {ADMIN_USERS.includes(userId) && <span style={{ background: "#ef4444", fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white' }}>MOD</span>}
-              <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>
-                {user?.username}
-              </NavLink>
+              <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>{userData?.username}</NavLink>
             </div>
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {showDelete && (
-          <button 
-            onClick={onDelete} 
-            style={{ 
-              background: "#1a1a1a", 
-              border: "1px solid #333", 
-              color: "white", 
-              padding: "6px 10px", 
-              borderRadius: 8, 
-              cursor: "pointer", 
-              fontSize: 14,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            🗑️
-          </button>
-        )}
+        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>🗑️</button>}
       </div>
     );
   };
@@ -262,35 +256,22 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const RenderReplies = ({ allReplies, parentId, postId, depth = 0 }: { allReplies: ForumReply[], parentId: string | null, postId: string, depth?: number }) => {
     const children = allReplies.filter(r => r.parent_reply_id === parentId);
     if (children.length === 0) return null;
-
     return (
       <div style={{ marginLeft: depth > 0 ? 20 : 0, borderLeft: depth > 0 ? "2px solid #222" : "none", paddingLeft: depth > 0 ? 15 : 0 }}>
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser.id);
           const isReplyDisliked = reply.Reply_Dislikes?.some(d => d.user_id === currentUser.id);
           const canDeleteReply = (isMod || currentUser.id === reply.user_id);
-
+          const replyUserData = getUserData(reply.Users);
           return (
             <div key={reply.reply_id} style={{ marginTop: 15 }}>
               <div style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222' }}>
-                <AuthorHeader 
-                  user={reply.Users} 
-                  userId={reply.user_id} 
-                  createdAt={reply.created_at}
-                  showDelete={canDeleteReply}
-                  onDelete={() => setDeleteModal({ isOpen: true, type: 'reply', id: reply.reply_id })}
-                />
-                <div style={{ margin: '14px 0' }}>
-                  <p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
-                </div>
+                <AuthorHeader user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} showDelete={canDeleteReply} onDelete={() => setDeleteModal({ isOpen: true, type: 'reply', id: reply.reply_id })} />
+                <div style={{ margin: '14px 0' }}><p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p></div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
-                    👍 {reply.Reply_Likes?.length || 0}
-                  </button>
-                  <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem", display: 'flex', alignItems: 'center', gap: 5 }}>
-                    👎 {reply.Reply_Dislikes?.length || 0}
-                  </button>
-                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
+                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
+                  <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
+                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: replyUserData?.username || "user" })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
                 </div>
               </div>
               <RenderReplies allReplies={allReplies} parentId={reply.reply_id} postId={postId} depth={depth + 1} />
@@ -305,28 +286,31 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable', background: '#000', minHeight: '100vh' } as any}>
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 20, marginBottom: 25, borderBottom: '1px solid #1a1a1a' }}>
-        <button 
-          onClick={() => setActiveTab('all')}
-          style={{ 
-            background: 'none', border: 'none', color: activeTab === 'all' ? '#3b82f6' : '#666', 
-            padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
-            borderBottom: activeTab === 'all' ? '2px solid #3b82f6' : '2px solid transparent' 
-          }}
-        >
-          All Posts
-        </button>
-        <button 
-          onClick={() => setActiveTab('following')}
-          style={{ 
-            background: 'none', border: 'none', color: activeTab === 'following' ? '#3b82f6' : '#666', 
-            padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
-            borderBottom: activeTab === 'following' ? '2px solid #3b82f6' : '2px solid transparent' 
-          }}
-        >
-          Following
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, borderBottom: '1px solid #1a1a1a' }}>
+        <div style={{ display: 'flex', gap: 20 }}>
+          {['all', 'following', 'algorithmic'].map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab as any)} style={{ 
+              background: 'none', border: 'none', color: activeTab === tab ? '#3b82f6' : '#666', 
+              padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
+              borderBottom: activeTab === tab ? '2px solid #3b82f6' : '2px solid transparent'
+            }}>
+              {tab === 'algorithmic' ? 'Feed' : tab === 'all' ? 'All Posts' : 'Following'}
+            </button>
+          ))}
+        </div>
+        
+        {activeTab !== 'algorithmic' && (
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 10 }}>
+            <select 
+              value={sortBy} 
+              onChange={(e) => setSortBy(e.target.value as any)}
+              style={{ background: '#111', color: '#ccc', border: '1px solid #333', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
+            >
+              <option value="newest">Newest First</option>
+              <option value="popular">Most Liked</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
@@ -334,17 +318,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
         <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#3b82f6", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
       </div>
 
-      <CustomModal 
-        isOpen={deleteModal.isOpen} 
-        title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"}
-        confirmText="Delete Forever"
-        confirmColor="#ff4d4d"
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}
-      >
-        {deleteModal.type === 'post' 
-          ? "Are you sure? This will permanently delete this post and ALL replies." 
-          : "Are you sure? This will permanently delete this reply and all sub-replies."}
+      <CustomModal isOpen={deleteModal.isOpen} title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} confirmText="Delete Forever" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>
+        {deleteModal.type === 'post' ? "Are you sure? This will permanently delete this post and ALL replies." : "Are you sure? This will permanently delete this reply and all sub-replies."}
       </CustomModal>
 
       {posts.length === 0 ? (
@@ -353,38 +328,24 @@ export default function Forum({ currentUser }: { currentUser: any }) {
         </div>
       ) : (
         posts.map((post) => {
-          const replyCount = post.Forum_Replies?.length || 0;
           const isExpanded = expandedPosts[post.post_id];
-          const canDeletePost = (isMod || currentUser.id === post.user_id);
           const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
-
           return (
             <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
-              <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={canDeletePost} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
-              <div style={{ margin: "18px 0" }}>
-                <p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
-                  👍 {post.Post_Likes?.length || 0}
-                </button>
-                <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 6 }}>
-                  👎 {post.Post_Dislikes?.length || 0}
-                </button>
-                <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: '0.9rem' }}>
-                    {isExpanded ? 'Hide Replies' : replyCount > 0 ? `See ${replyCount} Replies` : 'Reply'}
-                </button>
+              <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || currentUser.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
+              <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p></div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
+                <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
+                <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
+                
+                {/* 2. RANK SCORE DISPLAY REMOVED FROM HERE */}
               </div>
               {isExpanded && (
                 <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
                   <RenderReplies allReplies={post.Forum_Replies || []} parentId={null} postId={post.post_id} />
                   <div style={{ marginTop: 15 }}>
-                    {replyingTo?.postId === post.post_id && (
-                      <div style={{ fontSize: 12, color: '#3b82f6', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Replying to @{replyingTo.username}</span>
-                        <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>Cancel</button>
-                      </div>
-                    )}
+                    {replyingTo?.postId === post.post_id && <div style={{ fontSize: 12, color: '#3b82f6', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}><span>Replying to @{replyingTo.username}</span><button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>Cancel</button></div>}
                     <div style={{ display: "flex", gap: 8 }}>
                       <input type="text" placeholder="Write a reply..." value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid #222", background: "#000", color: "white" }} />
                       <button onClick={() => {

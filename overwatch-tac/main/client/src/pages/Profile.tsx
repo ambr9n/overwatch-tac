@@ -201,7 +201,7 @@ export default function Profile() {
           <span style={{ fontWeight: "500" }}>{user.username}</span>
         </NavLink>
         {!isMe && currentUser && (
-          <button onClick={() => handleFollowToggle(user.user_id)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: isFollowingThisUser ? "1px solid #444" : "none", background: isFollowingThisUser ? "transparent" : "#3b82f6", color: "white" }}>
+          <button onClick={() => handleFollowToggle(user.user_id)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: isFollowingThisUser ? "1px solid #444" : "none", background: isFollowingThisUser ? "transparent" : "#dd65fbff", color: "white" }}>
             {isFollowingThisUser ? "Unfollow" : "Follow"}
           </button>
         )}
@@ -237,9 +237,11 @@ export default function Profile() {
               <AuthorHeader user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} />
               <p style={{ fontSize: 14, color: "#ccc", margin: "8px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", reply.reply_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", reply.reply_id).eq("user_id", currentUser.id); else await supabase.from("Reply_Likes").insert([{ reply_id: reply.reply_id, user_id: currentUser.id }]); fetchPosts(profile!.user_id); }} style={{ background: isLiked ? "#3b82f633" : "#222", color: "white", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}>👍 {reply.Reply_Likes.length}</button>
+                {/* Updated background to pink hue */}
+                <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", reply.reply_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", reply.reply_id).eq("user_id", currentUser.id); else await supabase.from("Reply_Likes").insert([{ reply_id: reply.reply_id, user_id: currentUser.id }]); fetchPosts(profile!.user_id); }} style={{ background: isLiked ? "#dd65fb33" : "#222", color: "white", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}>👍 {reply.Reply_Likes.length}</button>
                 <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Reply_Dislikes").select("*").eq("reply_id", reply.reply_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Reply_Dislikes").delete().eq("reply_id", reply.reply_id).eq("user_id", currentUser.id); else await supabase.from("Reply_Dislikes").insert([{ reply_id: reply.reply_id, user_id: currentUser.id }]); fetchPosts(profile!.user_id); }} style={{ background: isDisliked ? "#ef444433" : "#222", color: "white", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}>👎 {reply.Reply_Dislikes.length}</button>
-                <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: "none", border: "none", color: "#3b82f6", cursor: "pointer", fontSize: 12 }}>Reply</button>
+                {/* Updated color to pink hue */}
+                <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: "none", border: "none", color: "#dd65fb", cursor: "pointer", fontSize: 12 }}>Reply</button>
               </div>
               <RenderReplies allReplies={allReplies} parentId={reply.reply_id} postId={postId} depth={depth + 1} />
             </div>
@@ -259,8 +261,9 @@ export default function Profile() {
           <div>
             <h2 style={{ margin: 0 }}>{profile.username}</h2>
             <div style={{ display: "flex", gap: 15, marginTop: 8 }}>
-              <span onClick={() => fetchFollowersList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#3b82f6" }}>{followerCount}</strong> Followers</span>
-              <span onClick={() => fetchFollowingList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#3b82f6" }}>{followingCount}</strong> Following</span>
+              {/* Updated count color to pink hue */}
+              <span onClick={() => fetchFollowersList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#dd65fb" }}>{followerCount}</strong> Followers</span>
+              <span onClick={() => fetchFollowingList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#dd65fb" }}>{followingCount}</strong> Following</span>
             </div>
             {profile.bio && (
               <p style={{ marginTop: 12, color: "#aaa", fontSize: 14, maxWidth: 500, lineHeight: "1.4", whiteSpace: "pre-wrap" }}>
@@ -270,7 +273,8 @@ export default function Profile() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          {!isOwnProfile && <button onClick={() => handleFollowToggle(profile.user_id)} style={{ padding: "8px 24px", borderRadius: 8, background: isFollowing ? "#1a1a1a" : "#3b82f6", color: "white", border: isFollowing ? "1px solid #333" : "none", cursor: "pointer", fontWeight: "bold" }}>{isFollowing ? "Unfollow" : "Follow"}</button>}
+          {/* Updated background to pink hue */}
+          {!isOwnProfile && <button onClick={() => handleFollowToggle(profile.user_id)} style={{ padding: "8px 24px", borderRadius: 8, background: isFollowing ? "#1a1a1a" : "#dd65fb", color: "white", border: isFollowing ? "1px solid #333" : "none", cursor: "pointer", fontWeight: "bold" }}>{isFollowing ? "Unfollow" : "Follow"}</button>}
           {isOwnProfile && <button onClick={() => setShowSettings(true)} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}>Settings ⚙️</button>}
         </div>
       </div>
@@ -295,7 +299,8 @@ export default function Profile() {
               <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." style={{ width: "100%", padding: 10, marginTop: 4, borderRadius: 6, border: "1px solid #333", background: "#000", color: "white", boxSizing: "border-box", minHeight: 80, resize: "vertical", fontFamily: "inherit" }} />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={handleUpdateProfile} style={{ flex: 1, padding: 10, background: "#3b82f6", border: "none", color: "white", borderRadius: 6, cursor: "pointer", fontWeight: "bold" }}>Save Changes</button>
+              {/* Updated background to pink hue */}
+              <button onClick={handleUpdateProfile} style={{ flex: 1, padding: 10, background: "#dd65fb", border: "none", color: "white", borderRadius: 6, cursor: "pointer", fontWeight: "bold" }}>Save Changes</button>
               <button onClick={() => setShowSettings(false)} style={{ flex: 1, padding: 10, background: "#333", border: "none", color: "white", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
             </div>
             <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid #222" }} />
@@ -312,16 +317,18 @@ export default function Profile() {
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} />
             <p style={{ fontSize: 16, color: "#ddd", margin: "14px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", post.post_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Post_Likes").delete().eq("post_id", post.post_id).eq("user_id", currentUser.id); else await supabase.from("Post_Likes").insert([{ post_id: post.post_id, user_id: currentUser.id }]); fetchPosts(profile.user_id); }} style={{ background: isLiked ? "#3b82f633" : "#1a1a1a", color: "white", padding: "6px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}>👍 {post.Post_Likes.length}</button>
+              {/* Updated background to pink hue */}
+              <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", post.post_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Post_Likes").delete().eq("post_id", post.post_id).eq("user_id", currentUser.id); else await supabase.from("Post_Likes").insert([{ post_id: post.post_id, user_id: currentUser.id }]); fetchPosts(profile.user_id); }} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", color: "white", padding: "6px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}>👍 {post.Post_Likes.length}</button>
               <button onClick={async () => { if (!currentUser) return; const { data: existing } = await supabase.from("Post_Dislikes").select("*").eq("post_id", post.post_id).eq("user_id", currentUser.id).maybeSingle(); if (existing) await supabase.from("Post_Dislikes").delete().eq("post_id", post.post_id).eq("user_id", currentUser.id); else await supabase.from("Post_Dislikes").insert([{ post_id: post.post_id, user_id: currentUser.id }]); fetchPosts(profile.user_id); }} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", color: "white", padding: "6px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}>👎 {post.Post_Dislikes.length}</button>
-              <button onClick={() => setExpandedPosts((prev) => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: "none", border: "1px solid #333", color: "#3b82f6", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>{expandedPosts[post.post_id] ? "Hide Replies" : post.Forum_Replies.length > 0 ? `See ${post.Forum_Replies.length} Replies` : "Reply"}</button>
+              <button onClick={() => setExpandedPosts((prev) => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: "none", border: "1px solid #333", color: "#dd65fbff", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>{expandedPosts[post.post_id] ? "Hide Replies" : post.Forum_Replies.length > 0 ? `See ${post.Forum_Replies.length} Replies` : "Reply"}</button>
             </div>
             {expandedPosts[post.post_id] && (
               <div style={{ marginTop: 16, borderTop: "1px solid #1a1a1a", paddingTop: 10 }}>
                 <RenderReplies allReplies={post.Forum_Replies} parentId={null} postId={post.post_id} />
                 <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
                   <input type="text" placeholder={replyingTo?.postId === post.post_id ? `Replying to ${replyingTo.username}...` : "Write a reply..."} value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #222", background: "#000", color: "white" }} />
-                  <button onClick={() => { if (!currentUser) return; const payload: any = { post_id: post.post_id, user_id: currentUser.id, text: replyText[post.post_id] }; if (replyingTo?.postId === post.post_id) payload.parent_reply_id = replyingTo.replyId; supabase.from("Forum_Replies").insert([payload]).then(() => { setReplyText({ ...replyText, [post.post_id]: "" }); setReplyingTo(null); fetchPosts(profile.user_id); }); }} style={{ padding: "8px 18px", borderRadius: 8, background: "#3b82f6", border: "none", color: "white", cursor: "pointer", fontWeight: "bold" }}>Reply</button>
+                  {/* updated background color to a pretty pink */}
+                  <button onClick={() => { if (!currentUser) return; const payload: any = { post_id: post.post_id, user_id: currentUser.id, text: replyText[post.post_id] }; if (replyingTo?.postId === post.post_id) payload.parent_reply_id = replyingTo.replyId; supabase.from("Forum_Replies").insert([payload]).then(() => { setReplyText({ ...replyText, [post.post_id]: "" }); setReplyingTo(null); fetchPosts(profile.user_id); }); }} style={{ padding: "8px 18px", borderRadius: 8, background: "#f16dd2ff", border: "none", color: "white", cursor: "pointer", fontWeight: "bold" }}>Reply</button>
                 </div>
               </div>
             )}

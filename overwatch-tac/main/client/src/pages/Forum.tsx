@@ -290,9 +290,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
         <div style={{ display: 'flex', gap: 20 }}>
           {['all', 'following', 'algorithmic'].map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab as any)} style={{ 
-              background: 'none', border: 'none', color: activeTab === tab ? '#3b82f6' : '#666', 
+              background: 'none', border: 'none', color: activeTab === tab ? '#f29fffff' : '#e775bfff', 
               padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
-              borderBottom: activeTab === tab ? '2px solid #3b82f6' : '2px solid transparent'
+              borderBottom: activeTab === tab ? '2px solid #e856c6ff' : '2px solid transparent'
             }}>
               {tab === 'algorithmic' ? 'Feed' : tab === 'all' ? 'All Posts' : 'Following'}
             </button>
@@ -315,7 +315,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
 
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
-        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#3b82f6", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
+        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(255, 83, 206, 1)", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
       </div>
 
       <CustomModal isOpen={deleteModal.isOpen} title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} confirmText="Delete Forever" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>
@@ -337,7 +337,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
                 <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
-                <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
+                <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#dd65fbff', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
                 
                 {/* 2. RANK SCORE DISPLAY REMOVED FROM HERE */}
               </div>

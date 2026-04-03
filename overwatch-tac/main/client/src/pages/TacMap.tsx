@@ -152,6 +152,12 @@ const TacMap: React.FC = () => {
   const [selectedElement, setSelectedElement] = useState<{ type: "marker" | "drawing"; id: number } | null>(null);
   const [isDraggingElement, setIsDraggingElement] = useState(false);
 
+  // Zoom & Pan States
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [spacePressed, setSpacePressed] = useState(false);
+
   // Undo / Redo Stacks
   const [history, setHistory] = useState<HistoryState[]>([{ markers: [], drawings: [] }]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -238,6 +244,12 @@ const TacMap: React.FC = () => {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Spacebar for panning
+      if (e.key === ' ' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setSpacePressed(true);
+      }
+
       // Ignore keybinds if the user is typing in a text field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
@@ -275,8 +287,19 @@ const TacMap: React.FC = () => {
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') {
+        setSpacePressed(false);
+        setIsPanning(false);
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
   }, [historyIndex, history, selectedElement, selectedMap]);
 
   const drawCanvas = () => {
@@ -366,12 +389,26 @@ const TacMap: React.FC = () => {
     }
   };
 
+  // Convert client screen coordinates to translated map coordinates (1000x600 grid)
   const getCoords = (e: React.MouseEvent | React.DragEvent) => {
     const rect = mapRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
+    
+    // Position within the viewport div
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+
+    // Center of map is at 50%
+    const originX = rect.width / 2;
+    const originY = rect.height / 2;
+
+    // Account for pan and zoom to locate pixel on raw 1000x600 canvas
+    const x = ((clientX - originX - pan.x) / zoom) + originX;
+    const y = ((clientY - originY - pan.y) / zoom) + originY;
+
     return { 
-      x: ((e.clientX - rect.left) / rect.width) * 1000, 
-      y: ((e.clientY - rect.top) / rect.height) * 600 
+      x: (x / rect.width) * 1000, 
+      y: (y / rect.height) * 600 
     };
   };
 
@@ -433,6 +470,8 @@ const TacMap: React.FC = () => {
     setIsResetModalOpen(false);
     setHistory([{ markers: [], drawings: [] }]);
     setHistoryIndex(0);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -501,13 +540,13 @@ const TacMap: React.FC = () => {
   };
 
   const handleMapClick = (e: React.MouseEvent) => {
-    if (!selectedMap) return;
+    if (!selectedMap || spacePressed || isPanning) return;
     const { x, y } = getCoords(e);
 
     if (activeTool === "select") {
       const clickedMarker = markers.find(m => {
-        const dx = (m.x / 1000) * 1000 - x;
-        const dy = (m.y / 600) * 600 - y;
+        const dx = m.x - x;
+        const dy = m.y - y;
         return Math.sqrt(dx * dx + dy * dy) < 25; 
       });
       if (clickedMarker) {
@@ -536,6 +575,14 @@ const TacMap: React.FC = () => {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!selectedMap) return;
+
+    // Pan with spacebar held down or with Middle Mouse Button (button 1)
+    if (spacePressed || e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      return;
+    }
+
     const { x, y } = getCoords(e);
 
     if (activeTool === "pen") {
@@ -576,6 +623,15 @@ const TacMap: React.FC = () => {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!selectedMap) return;
+
+    if (isPanning) {
+      setPan(prev => ({
+        x: prev.x + e.movementX,
+        y: prev.y + e.movementY
+      }));
+      return;
+    }
+
     const { x, y } = getCoords(e);
 
     if (isDrawing && activeTool === "pen") {
@@ -604,16 +660,39 @@ const TacMap: React.FC = () => {
   };
 
   const handleMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
     if (isDrawing && activeTool === "pen") {
-      // Finalized pen stroke, save to history
       pushToHistory(markers, drawings);
     }
     if (isDraggingElement && selectedElement?.type === "marker") {
-      // Finalized marker move, save to history
       pushToHistory(markers, drawings);
     }
     setIsDrawing(false);
     setIsDraggingElement(false);
+  };
+
+  // Dedicated Zoom handler via scroll wheel
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!selectedMap) return;
+    e.preventDefault();
+
+    const zoomSpeed = 0.1;
+    const minZoom = 0.5;
+    const maxZoom = 5;
+    const delta = e.deltaY < 0 ? 1 : -1;
+    
+    setZoom(prevZoom => {
+      const newZoom = Math.min(Math.max(prevZoom + delta * zoomSpeed, minZoom), maxZoom);
+      
+      // Auto-recenter pan slightly when fully zooming out
+      if (newZoom === 1) {
+        setPan({ x: 0, y: 0 });
+      }
+      return newZoom;
+    });
   };
 
   const filteredMaps = mapList.filter(m => m.map_type?.toLowerCase() === selectedMode?.toLowerCase());
@@ -627,7 +706,7 @@ const TacMap: React.FC = () => {
       width: "100vw", display: "flex", overflow: "hidden", zIndex: 50 
     }}>
       
-      {/* LEFT SIDEBAR (Controls & Map Selection) */}
+      {/* LEFT SIDEBAR */}
       <div style={{ 
         width: sidebarOpen ? "350px" : "0px", background: "#161616", 
         borderRight: sidebarOpen ? "1px solid #282828" : "none", display: "flex", 
@@ -635,7 +714,6 @@ const TacMap: React.FC = () => {
         overflowX: "hidden", transition: "width 0.3s ease, padding 0.3s ease", flexShrink: 0
       }}>
         <div style={{ minWidth: "310px" }}>
-          {/* Replaced 'Tactical Map' heading with the Map Readout */}
           <div style={{ fontSize: "20px", marginBottom: "20px", fontWeight: "bold" }}>
             Map: <span style={{ color: "#f65dfb" }}>{selectedMap || "None Selected"}</span>
           </div>
@@ -692,8 +770,28 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {/* RIGHT MAIN AREA */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#0a0a0a", position: "relative", minWidth: 0, justifyContent: "center", alignItems: "center" }}>
+      {/* RIGHT MAIN AREA (THE VIEWPORT) */}
+      <div 
+        ref={mapRef} 
+        onWheel={handleWheel}
+        onDragOver={(e) => e.preventDefault()} 
+        onDrop={handleDrop} 
+        onClick={handleMapClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        style={{ 
+          flex: 1, 
+          display: "flex", 
+          background: "#0a0a0a", 
+          position: "relative", 
+          minWidth: 0, 
+          justifyContent: "center", 
+          alignItems: "center",
+          overflow: "hidden", // Keeps scale changes localized
+          cursor: spacePressed || isPanning ? "grabbing" : selectedMap ? "default" : "not-allowed"
+        }}
+      >
         
         {/* LEFT SIDEBAR TOGGLE BUTTON */}
         <button 
@@ -723,11 +821,31 @@ const TacMap: React.FC = () => {
           {sidebarOpen ? "«" : "»"}
         </button>
 
-        {/* MAP & CANVAS HUB */}
-        <div ref={mapRef} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} onClick={handleMapClick} style={{ width: "100%", height: "100%", position: "relative", backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center", backgroundColor: "#050505", cursor: selectedMap ? "default" : "not-allowed", opacity: selectedMap ? 1 : 0.6, aspectRatio: "1000 / 600", maxHeight: "100%", maxWidth: "100%", margin: "auto" }}>
+        {/* MAP CONTENT HUB (Scaled & Panned) */}
+        <div 
+          style={{ 
+            width: "100%", 
+            height: "100%", 
+            position: "relative", 
+            backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`, 
+            backgroundSize: "contain", 
+            backgroundRepeat: "no-repeat", 
+            backgroundPosition: "center", 
+            backgroundColor: "#050505", 
+            opacity: selectedMap ? 1 : 0.6, 
+            aspectRatio: "1000 / 600", 
+            maxHeight: "100%", 
+            maxWidth: "100%", 
+            margin: "auto",
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: "center center",
+            transition: isPanning ? "none" : "transform 0.05s ease-out", // Smooth zoom, instant pan
+            pointerEvents: selectedMap ? "auto" : "none"
+          }}
+        >
           
           {!selectedMap && (
-              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", color: "#888", zIndex: 10, pointerEvents: "none", textAlign: "center" }}>
+              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%) scale(1)", color: "#888", zIndex: 10, pointerEvents: "none", textAlign: "center" }}>
                   <p style={{ fontSize: "20px", fontWeight: "bold", color: "#f65dfb" }}>← Please Select a Map to Start</p>
               </div>
           )}
@@ -736,13 +854,10 @@ const TacMap: React.FC = () => {
             ref={canvasRef} 
             width={1000} 
             height={600} 
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
             style={{ 
               position: "absolute", top: 0, left: 0, width: "100%", height: "100%", 
               cursor: activeTool === "pen" ? "crosshair" : activeTool === "eraser" ? "cell" : activeTool === "move" ? "grab" : "default", 
-              zIndex: 2, pointerEvents: selectedMap ? "auto" : "none"
+              zIndex: 2
             }} 
           />
 
@@ -766,6 +881,13 @@ const TacMap: React.FC = () => {
             );
           })}
         </div>
+
+        {/* HUD UI - Zoom Indicator overlay inside main window */}
+        {selectedMap && (
+          <div style={{ position: "absolute", bottom: "20px", left: "20px", zIndex: 15, background: "rgba(0,0,0,0.6)", padding: "5px 10px", borderRadius: "4px", color: "#aaa", fontSize: "12px", pointerEvents: "none" }}>
+            Zoom: {Math.round(zoom * 100)}% | Hold Space + Drag to Pan
+          </div>
+        )}
 
         {/* RIGHT SIDEBAR TOGGLE BUTTON */}
         <button 

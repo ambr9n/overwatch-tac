@@ -103,7 +103,6 @@ const TacMap: React.FC = () => {
 
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -260,6 +259,7 @@ const TacMap: React.FC = () => {
       <h1>Tactical Map</h1>
 
       <div style={{ display: "flex", gap: "20px" }}>
+        {/* LEFT COLUMN: Controls & Map Area */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "10px" }}>
@@ -281,6 +281,7 @@ const TacMap: React.FC = () => {
             )}
           </div>
 
+          {/* Map Selection Accordion */}
           {showMapSelection && (
             <div style={{ background: "#222", padding: "15px", borderRadius: "8px", marginBottom: "20px", border: "1px solid #333" }}>
               <div style={{ marginBottom: "15px" }}>

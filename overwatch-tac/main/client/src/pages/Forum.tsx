@@ -45,8 +45,6 @@ const CustomModal: React.FC<{
   );
 };
 
-// --- UPDATED INTERFACES TO HANDLE SUPABASE ARRAY WRAPPING ---
-
 interface ForumReply {
   reply_id: string;
   post_id: string;
@@ -66,7 +64,6 @@ interface ForumPost {
   text: string;
   created_at: string;
   is_deleted: boolean;
-  // This can come back as an object or a single-item array from Supabase
   Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
   Post_Likes: { user_id: string }[];
   Post_Dislikes: { user_id: string }[];
@@ -91,7 +88,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'all' | 'following' | 'algorithmic'>('algorithmic');
+  
+  // 1. CHANGED DEFAULT TAB TO 'all'
+  const [activeTab, setActiveTab] = useState<'all' | 'following' | 'algorithmic'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
 
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
@@ -140,7 +139,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     const { data, error } = await query;
 
     if (!error && data) {
-      // Fixes the "neither type sufficiently overlaps" error by casting through unknown
       let processedData = (data as unknown as ForumPost[]).map(post => ({
         ...post,
         score: calculateAlgorithmicScore(post)
@@ -168,7 +166,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     fetchPosts();
   }, [activeTab, sortBy]);
 
-  // Helper to extract user info regardless of whether Supabase returned an object or array
   const getUserData = (userField: any) => {
     if (Array.isArray(userField)) return userField[0];
     return userField;
@@ -289,10 +286,9 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable', background: '#000', minHeight: '100vh' } as any}>
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       
-      {/* Tabs & Sort Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, borderBottom: '1px solid #1a1a1a' }}>
         <div style={{ display: 'flex', gap: 20 }}>
-          {['algorithmic', 'all', 'following'].map((tab) => (
+          {['all', 'following', 'algorithmic'].map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab as any)} style={{ 
               background: 'none', border: 'none', color: activeTab === tab ? '#3b82f6' : '#666', 
               padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
@@ -334,7 +330,6 @@ export default function Forum({ currentUser }: { currentUser: any }) {
         posts.map((post) => {
           const isExpanded = expandedPosts[post.post_id];
           const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
-          const postUserData = getUserData(post.Users);
           return (
             <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
               <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || currentUser.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
@@ -343,7 +338,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                 <button onClick={() => handleLike(post.post_id)} style={{ background: post.Post_Likes?.some(l => l.user_id === currentUser.id) ? "#3b82f633" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
                 <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
                 <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#3b82f6', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
-                {activeTab === 'algorithmic' && isMod && <span style={{ fontSize: 10, color: '#333' }}>Rank Score: {post.score?.toFixed(4)}</span>}
+                
+                {/* 2. RANK SCORE DISPLAY REMOVED FROM HERE */}
               </div>
               {isExpanded && (
                 <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>

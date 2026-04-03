@@ -879,7 +879,29 @@ const TacMap: React.FC = () => {
       {/* MAP SELECTOR MODAL WITH HOVER PREVIEW */}
       {isMapSelectorOpen && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-          <div style={{ background: "#161616", padding: "30px", borderRadius: "12px", border: "1px solid #282828", boxShadow: "0 0 30px rgba(230, 0, 130, 0.2)", width: "800px", maxWidth: "90vw", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "#161616", padding: "30px", borderRadius: "12px", border: "1px solid #282828", boxShadow: "0 0 30px rgba(230, 0, 130, 0.2)", width: "800px", maxWidth: "90vw", maxHeight: "80vh", display: "flex", flexDirection: "column", position: "relative" }}>
+            
+            {/* EXIT BUTTON */}
+            <button 
+              onClick={() => setIsMapSelectorOpen(false)} 
+              style={{ 
+                position: "absolute", 
+                top: "15px", 
+                right: "15px", 
+                background: "transparent", 
+                border: "none", 
+                color: "#666", 
+                fontSize: "24px", 
+                cursor: "pointer", 
+                transition: "color 0.2s" 
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "#f65dfb"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "#666"}
+              title="Close"
+            >
+              ×
+            </button>
+
             <h3 style={{ color: "#f65dfb", marginBottom: "20px", fontSize: "22px", fontWeight: "750", textAlign: "center" }}>Select a Map</h3>
             <div style={{ display: "flex", flexGrow: 1, minHeight: 0, gap: "30px", overflow: "hidden", alignItems: "center" }}>
               <div style={{ flex: "1 1 50%", overflowY: "auto", paddingRight: "10px" }}>

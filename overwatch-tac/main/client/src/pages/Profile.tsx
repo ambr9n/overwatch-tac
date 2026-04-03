@@ -46,7 +46,45 @@ export default function Profile() {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
+  
+  // Follow States
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [followersList, setFollowersList] = useState<UserProfile[]>([]);
+  const [followingList, setFollowingList] = useState<UserProfile[]>([]);
+
+  const fetchFollowData = async (userId: string, currentUserId?: string) => {
+    const { data: followers } = await supabase.from("User_Follows").select("follower_id").eq("following_id", userId);
+    const { data: following } = await supabase.from("User_Follows").select("following_id").eq("follower_id", userId);
+
+    setFollowerCount(followers?.length || 0);
+    setFollowingCount(following?.length || 0);
+
+    if (currentUserId) {
+      setIsFollowing(followers?.some(f => f.follower_id === currentUserId) || false);
+    }
+  };
+
+  const fetchFollowersList = async (userId: string) => {
+    const { data } = await supabase
+      .from("User_Follows")
+      .select("follower:Users(user_id, username, profile_image_link)")
+      .eq("following_id", userId);
+    if (data) setFollowersList(data.map((f: any) => f.follower));
+    setShowFollowersModal(true);
+  };
+
+  const fetchFollowingList = async (userId: string) => {
+    const { data } = await supabase
+      .from("User_Follows")
+      .select("following:Users(user_id, username, profile_image_link)")
+      .eq("follower_id", userId);
+    if (data) setFollowingList(data.map((f: any) => f.following));
+    setShowFollowingModal(true);
+  };
 
   const fetchProfile = async (userId: string, currentUserId?: string) => {
     const { data, error } = await supabase.from("Users").select("*").eq("user_id", userId).maybeSingle();
@@ -54,16 +92,7 @@ export default function Profile() {
       setProfile(data);
       setProfileImageUrl(data.profile_image_link || "");
     }
-
-    if (currentUserId && userId !== currentUserId) {
-      const { data: followData } = await supabase
-        .from("User_Follows")
-        .select("*")
-        .eq("follower_id", currentUserId)
-        .eq("following_id", userId)
-        .maybeSingle();
-      setIsFollowing(!!followData);
-    }
+    await fetchFollowData(userId, currentUserId);
   };
 
   const fetchPosts = async (userId: string) => {
@@ -109,7 +138,7 @@ export default function Profile() {
     } else {
       await supabase.from("User_Follows").insert([{ follower_id: currentUser.id, following_id: profile.user_id }]);
     }
-    setIsFollowing(!isFollowing);
+    fetchFollowData(profile.user_id, currentUser.id);
   };
 
   const handleUpdateAvatar = async () => {
@@ -135,6 +164,26 @@ export default function Profile() {
       </div>
     </div>
   );
+
+  const UserModal = ({ isOpen, onClose, title, list }: { isOpen: boolean, onClose: () => void, title: string, list: UserProfile[] }) => {
+    if (!isOpen) return null;
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
+        <div style={{ background: '#111', padding: 24, borderRadius: 12, width: 350, border: '1px solid #333', maxHeight: '70vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h3 style={{ margin: 0 }}>{title}</h3>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕</button>
+          </div>
+          {list.length === 0 ? <p style={{ color: '#555' }}>Nothing to show here.</p> : list.map(u => (
+            <NavLink key={u.user_id} to={`/profile/${u.user_id}`} onClick={onClose} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, textDecoration: 'none', color: 'white' }}>
+              <img src={u.profile_image_link || DEFAULT_AVATAR} style={{ width: 32, height: 32, borderRadius: '50%' }} />
+              <span>{u.username}</span>
+            </NavLink>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const RenderReplies = ({ allReplies, parentId, postId, depth = 0 }: { allReplies: ForumReply[], parentId: string | null, postId: string, depth?: number }) => {
     const children = allReplies.filter(r => r.parent_reply_id === parentId);
@@ -184,14 +233,22 @@ export default function Profile() {
       {/* Header Section */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid #333' }} alt="Avatar" />
+          <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '2px solid #333' }} alt="Avatar" />
           <div>
             <h2 style={{ margin: 0 }}>{profile.username}</h2>
+            <div style={{ display: 'flex', gap: 15, marginTop: 8 }}>
+              <span onClick={() => fetchFollowersList(profile.user_id)} style={{ cursor: 'pointer', fontSize: 14 }}>
+                <strong style={{ color: '#3b82f6' }}>{followerCount}</strong> Followers
+              </span>
+              <span onClick={() => fetchFollowingList(profile.user_id)} style={{ cursor: 'pointer', fontSize: 14 }}>
+                <strong style={{ color: '#3b82f6' }}>{followingCount}</strong> Following
+              </span>
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {!isOwnProfile && (
-            <button onClick={handleFollowToggle} style={{ padding: "8px 18px", borderRadius: 8, background: "#3b82f6", color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+            <button onClick={handleFollowToggle} style={{ padding: "8px 24px", borderRadius: 8, background: isFollowing ? "#1a1a1a" : "#3b82f6", color: 'white', border: isFollowing ? '1px solid #333' : 'none', cursor: 'pointer', fontWeight: 'bold' }}>
               {isFollowing ? 'Unfollow' : 'Follow'}
             </button>
           )}
@@ -202,6 +259,10 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      {/* Follower/Following Lists */}
+      <UserModal isOpen={showFollowersModal} onClose={() => setShowFollowersModal(false)} title="Followers" list={followersList} />
+      <UserModal isOpen={showFollowingModal} onClose={() => setShowFollowingModal(false)} title="Following" list={followingList} />
 
       {/* Settings Modal */}
       {showSettings && (

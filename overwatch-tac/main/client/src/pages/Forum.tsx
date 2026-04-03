@@ -45,6 +45,8 @@ const CustomModal: React.FC<{
   );
 };
 
+// --- UPDATED INTERFACES TO HANDLE SUPABASE ARRAY WRAPPING ---
+
 interface ForumReply {
   reply_id: string;
   post_id: string;
@@ -53,7 +55,7 @@ interface ForumReply {
   created_at: string;
   is_deleted: boolean;
   parent_reply_id?: string;
-  Users: { username: string; profile_image_link: string; };
+  Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
   Reply_Likes: { user_id: string }[];
   Reply_Dislikes: { user_id: string }[];
 }
@@ -64,11 +66,12 @@ interface ForumPost {
   text: string;
   created_at: string;
   is_deleted: boolean;
-  Users: { username: string; profile_image_link: string; };
+  // This can come back as an object or a single-item array from Supabase
+  Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
   Post_Likes: { user_id: string }[];
   Post_Dislikes: { user_id: string }[];
   Forum_Replies: ForumReply[];
-  score?: number; // Added for algorithmic ranking
+  score?: number; 
 }
 
 const ADMIN_USERS = [
@@ -101,16 +104,10 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     const likes = post.Post_Likes?.length || 0;
     const dislikes = post.Post_Dislikes?.length || 0;
     const replies = post.Forum_Replies?.length || 0;
-    
-    // Engagement Score: Likes (1pt), Replies (3pts), Dislikes (-1pt)
     const engagement = (likes * 1) + (replies * 3) - (dislikes * 1);
-    
-    // Time Decay: Score reduces as post gets older
     const postDate = new Date(post.created_at).getTime();
     const now = new Date().getTime();
     const hoursSincePosted = Math.max(1, (now - postDate) / (1000 * 60 * 60));
-    
-    // Formula: Engagement / (Hours + 2)^1.5 (Gravity)
     return engagement / Math.pow((hoursSincePosted + 2), 1.5);
   };
 
@@ -143,7 +140,8 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     const { data, error } = await query;
 
     if (!error && data) {
-      let processedData = (data as ForumPost[]).map(post => ({
+      // Fixes the "neither type sufficiently overlaps" error by casting through unknown
+      let processedData = (data as unknown as ForumPost[]).map(post => ({
         ...post,
         score: calculateAlgorithmicScore(post)
       }));
@@ -169,6 +167,12 @@ export default function Forum({ currentUser }: { currentUser: any }) {
   useEffect(() => {
     fetchPosts();
   }, [activeTab, sortBy]);
+
+  // Helper to extract user info regardless of whether Supabase returned an object or array
+  const getUserData = (userField: any) => {
+    if (Array.isArray(userField)) return userField[0];
+    return userField;
+  };
 
   if (loading) return null;
 
@@ -232,16 +236,17 @@ export default function Forum({ currentUser }: { currentUser: any }) {
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
       e.currentTarget.src = DEFAULT_AVATAR;
     };
+    const userData = getUserData(user);
     return (
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <NavLink to={`/profile/${userId}`}>
-            <img src={user?.profile_image_link || DEFAULT_AVATAR} onError={handleImageError} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} />
+            <img src={userData?.profile_image_link || DEFAULT_AVATAR} onError={handleImageError} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} />
           </NavLink>
           <div>
             <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
               {ADMIN_USERS.includes(userId) && <span style={{ background: "#ef4444", fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white' }}>MOD</span>}
-              <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>{user?.username}</NavLink>
+              <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>{userData?.username}</NavLink>
             </div>
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
@@ -260,6 +265,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser.id);
           const isReplyDisliked = reply.Reply_Dislikes?.some(d => d.user_id === currentUser.id);
           const canDeleteReply = (isMod || currentUser.id === reply.user_id);
+          const replyUserData = getUserData(reply.Users);
           return (
             <div key={reply.reply_id} style={{ marginTop: 15 }}>
               <div style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222' }}>
@@ -268,7 +274,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#3b82f633" : "#222", border: isReplyLiked ? "1px solid #3b82f6" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
                   <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
-                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
+                  <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: replyUserData?.username || "user" })} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12 }}>Reply</button>
                 </div>
               </div>
               <RenderReplies allReplies={allReplies} parentId={reply.reply_id} postId={postId} depth={depth + 1} />
@@ -292,7 +298,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
               padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
               borderBottom: activeTab === tab ? '2px solid #3b82f6' : '2px solid transparent'
             }}>
-              {tab === 'algorithmic' ? '✨ Feed' : tab === 'all' ? 'All Posts' : 'Following'}
+              {tab === 'algorithmic' ? 'Feed' : tab === 'all' ? 'All Posts' : 'Following'}
             </button>
           ))}
         </div>
@@ -328,6 +334,7 @@ export default function Forum({ currentUser }: { currentUser: any }) {
         posts.map((post) => {
           const isExpanded = expandedPosts[post.post_id];
           const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
+          const postUserData = getUserData(post.Users);
           return (
             <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
               <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || currentUser.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />

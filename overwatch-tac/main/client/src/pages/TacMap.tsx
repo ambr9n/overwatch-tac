@@ -533,7 +533,7 @@ const TacMap: React.FC = () => {
       else { xx = x1 + param * C; yy = y1 + param * D; }
 
       const dx = px - xx;
-      const dy = py - yy;
+      const dy = yy - yy;
       if (Math.sqrt(dx * dx + dy * dy) < threshold) return true;
     }
     return false;
@@ -731,7 +731,7 @@ const TacMap: React.FC = () => {
               boxShadow: isMapButtonHovered ? "0 6px 15px rgba(246, 93, 251, 0.5)" : "0 4px 10px rgba(230, 0, 130, 0.35)", 
             }}
           >
-            Select Map
+            {selectedMap ? "Change Map" : "Select Map"}
           </button>
 
           {/* ACTION BUTTONS */}

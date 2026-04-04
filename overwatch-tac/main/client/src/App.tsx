@@ -4,6 +4,7 @@ import { supabase } from "./Supabase";
 
 import Navbar from "./components/Navbar";
 import Startup from "./components/Startup/Startup";
+import Footer from "./components/Footer"; // <-- Import Footer
 
 import Home from "./pages/Home";
 import TacMap from "./pages/TacMap";
@@ -38,9 +39,9 @@ const App = () => {
       {showIntro && <Startup onFinish={() => setShowIntro(false)} />}
 
       <Router>
-        <div style={{ minHeight: "100vh", background: "#111", color: "white" }}>
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#111", color: "white" }}>
           <Navbar />
-          <main style={{ padding: "40px" }}>
+          <main style={{ flex: 1, padding: "40px" }}>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/tacmap" element={<TacMap />} />
@@ -54,6 +55,7 @@ const App = () => {
               <Route path="/forum" element={<Forum currentUser={user} />} />
             </Routes>
           </main>
+          <Footer /> {/* <-- Footer added here */}
         </div>
       </Router>
     </>

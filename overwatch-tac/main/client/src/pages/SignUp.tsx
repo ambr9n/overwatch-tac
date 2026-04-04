@@ -8,7 +8,7 @@ const SignUp: React.FC = () => {
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
 
-const handleSignup = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
@@ -31,16 +31,40 @@ const handleSignup = async (e: React.FormEvent) => {
   };
 
   return (
-    <div style={{ maxWidth: "400px", margin: "50px auto", textAlign: "center" }}>
-      <h2>Sign Up</h2>
-      <form onSubmit={handleSignup} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+    <div
+      style={{
+        maxWidth: "400px",
+        margin: "80px auto",
+        padding: "30px",
+        background: "#161616",
+        borderRadius: "12px",
+        border: "1px solid #282828",
+        color: "white",
+        textAlign: "center",
+        boxShadow: "0 0 20px #e6008233",
+      }}
+    >
+      <h2 style={{ fontSize: "28px", marginBottom: "30px", color: "#f65dfb" }}>
+        Sign Up
+      </h2>
+
+      <form
+        onSubmit={handleSignup}
+        style={{ display: "flex", flexDirection: "column", gap: "18px" }}
+      >
         <input
           type="text"
           placeholder="Username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           required
-          style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+          style={{
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            background: "#111",
+            color: "white",
+          }}
         />
         <input
           type="email"
@@ -48,7 +72,13 @@ const handleSignup = async (e: React.FormEvent) => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+          style={{
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            background: "#111",
+            color: "white",
+          }}
         />
         <input
           type="password"
@@ -56,11 +86,32 @@ const handleSignup = async (e: React.FormEvent) => {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          style={{ padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+          style={{
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            background: "#111",
+            color: "white",
+          }}
         />
         <button
           type="submit"
-          style={{ padding: "10px", borderRadius: "5px", background: "orange", border: "none", fontWeight: "bold" }}
+          style={{
+            padding: "12px",
+            borderRadius: "8px",
+            background: "#e60082",
+            border: "none",
+            fontWeight: "bold",
+            color: "white",
+            cursor: "pointer",
+            transition: "all 0.2s ease-in-out",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#f65dfb";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#e60082";
+          }}
         >
           Sign Up
         </button>

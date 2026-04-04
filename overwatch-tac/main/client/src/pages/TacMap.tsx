@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../Supabase";
 import { useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 /** * TYPES & INTERFACES */
 type Team = "ally" | "enemy";
@@ -176,7 +177,7 @@ const TrashIcon = () => (
 const TacMap: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const loadId = searchParams.get("load");
-
+  const navigate = useNavigate();
   const [mapList, setMapList] = useState<MapData[]>([]);
   const [heroAssets, setHeroAssets] = useState<HeroAsset[]>([]);
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -217,6 +218,8 @@ const TacMap: React.FC = () => {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   const [hoveredMap, setHoveredMap] = useState<MapData | null>(null);
   const [isMapButtonHovered, setIsMapButtonHovered] = useState(false);
@@ -473,7 +476,11 @@ const TacMap: React.FC = () => {
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Please log in to save.");
+      if (!user) {
+        setIsAuthModalOpen(true);
+        setIsSaving(false);
+        return;
+      }
 
       let currentId = activeSaveId;
       if (!currentId) {
@@ -990,6 +997,18 @@ const TacMap: React.FC = () => {
 
       <CustomModal isOpen={isResetModalOpen} title="Reset Map?" onConfirm={clearCanvas} onCancel={() => setIsResetModalOpen(false)} confirmText="Reset" showCancel={true}>
         <p style={{ color: "#aaa" }}>This will clear all markers, drawings, and descriptions. Are you sure?</p>
+      </CustomModal>
+
+      <CustomModal
+        isOpen={isAuthModalOpen}
+        title="Not Signed In"
+        onConfirm={() => navigate("/login")} // 👈 redirect to login page
+        showCancel={true} // optional: keep cancel if they want to close without logging in
+        confirmText="Log In"
+      >
+        <p style={{ color: "#aaa" }}>
+          Sign in or log back in to save maps.
+        </p>
       </CustomModal>
     </div>
   );

@@ -39,7 +39,6 @@ interface DrawingLine {
   width: number;
 }
 
-// History snapshot for undo/redo
 interface HistoryState {
   markers: Marker[];
   drawings: DrawingLine[];
@@ -94,7 +93,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
 
 interface ToolButtonProps {
   name: ToolType;
-  icon: string;
+  icon: React.ReactNode;
   activeTool: ToolType | null;
   onClick: (tool: ToolType) => void;
   disabled?: boolean;
@@ -113,14 +112,15 @@ const ToolButton: React.FC<ToolButtonProps> = ({ name, icon, activeTool, onClick
         background: isActive ? "linear-gradient(45deg, #e60082, #f65dfb)" : "#333",
         color: "white", cursor: disabled ? "not-allowed" : "pointer",
         display: "flex", justifyContent: "center", alignItems: "center", 
-        fontSize: "20px",
-        transition: "transform 0.2s, background 0.2s, box-shadow 0.2s",
+        transition: "transform(0.2s), background 0.2s, box-shadow 0.2s",
         transform: isActive ? "scale(1.05)" : "scale(1)",
         boxShadow: isActive ? "0 4px 10px rgba(246, 93, 251, 0.4)" : "none",
         opacity: disabled ? 0.5 : 1
       }}
     >
-      {icon}
+      <div style={{ width: "24px", height: "24px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {icon}
+      </div>
     </button>
   );
 };
@@ -128,11 +128,55 @@ const ToolButton: React.FC<ToolButtonProps> = ({ name, icon, activeTool, onClick
 const gameModes: GameMode[] = ["Hybrid", "Escort", "Control", "Push", "Flashpoint", "Clash", "Assault"];
 const roles = ["Damage", "Support", "Tank"];
 
+// FLAT OUTLINE SVG ICONS
+const SelectIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="3 3 10 21 13 13 21 10 3 3"/>
+  </svg>
+);
+
+const PenIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+  </svg>
+);
+
+const EraserIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
+    <path d="M22 21H7"/>
+    <path d="m5 11 9 9"/>
+  </svg>
+);
+
+const UndoIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7v6h6"/>
+    <path d="M21 17a9 9 0 0 0-15.5-6L3 13"/>
+  </svg>
+);
+
+const RedoIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 7v6h-6"/>
+    <path d="M3 17a9 9 0 0 1 15.5-6L21 13"/>
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 6h18"/>
+    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+);
+
 const TacMap: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const loadId = searchParams.get("load");
 
-  // State Management
   const [mapList, setMapList] = useState<MapData[]>([]);
   const [heroAssets, setHeroAssets] = useState<HeroAsset[]>([]);
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -148,7 +192,6 @@ const TacMap: React.FC = () => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [activeSaveId, setActiveSaveId] = useState<string | null>(loadId);
   
-  // Toolbar and Selection states
   const [activeTool, setActiveTool] = useState<ToolType | null>(null);
   const [brushSize, setBrushSize] = useState<number>(4);
   const [selectedElement, setSelectedElement] = useState<{ type: "marker" | "drawing"; id: number } | null>(null);
@@ -158,28 +201,23 @@ const TacMap: React.FC = () => {
   const [isSlidingBrush, setIsSlidingBrush] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 500, y: 300 });
 
-  // Zoom & Pan States
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
 
-  // Undo / Redo Stacks
   const [history, setHistory] = useState<HistoryState[]>([{ markers: [], drawings: [] }]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  // Sidebar states
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
 
-  // Modal toggles
   const [isMapSelectorOpen, setIsMapSelectorOpen] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
 
-  // Hover states
   const [hoveredMap, setHoveredMap] = useState<MapData | null>(null);
   const [isMapButtonHovered, setIsMapButtonHovered] = useState(false);
 
@@ -331,7 +369,6 @@ const TacMap: React.FC = () => {
       ctx.lineWidth = drawing.width;
       ctx.stroke();
 
-      // Bounding box for selected drawing
       if (selectedElement?.type === "drawing" && selectedElement.id === drawing.id) {
         const xs = drawing.points.map(p => p.x);
         const ys = drawing.points.map(p => p.y);
@@ -349,7 +386,6 @@ const TacMap: React.FC = () => {
       }
     });
 
-    // Brush size preview ring
     if (selectedMap && (activeTool === "pen" || isSlidingBrush)) {
       ctx.beginPath();
       ctx.arc(mousePos.x, mousePos.y, brushSize / 2, 0, Math.PI * 2);
@@ -645,7 +681,7 @@ const TacMap: React.FC = () => {
     if (!selectedMap) return;
 
     const { x, y } = getCoords(e);
-    setMousePos({ x, y }); // Update for pointer and brush ring
+    setMousePos({ x, y }); 
 
     if (isPanning) {
       setPan(prev => ({
@@ -691,7 +727,6 @@ const TacMap: React.FC = () => {
     if (isDrawing && activeTool === "pen") {
       pushToHistory(markers, drawings);
     }
-    // FIX: Push to history stack when a dragging action ends on a drawing or marker
     if (isDraggingElement && selectedElement) {
       pushToHistory(markers, drawings);
     }
@@ -796,10 +831,8 @@ const TacMap: React.FC = () => {
         }}
       >
         
-        {/* LEFT SIDEBAR TOGGLE BUTTON */}
         <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ position: "absolute", top: "20px", left: "10px", zIndex: 15, background: "rgba(230, 0, 130, 0.8)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(0,0,0,0.3)", transition: "left 0.3s ease, background 0.2s" }} title={sidebarOpen ? "Close Map Sidebar" : "Open Map Sidebar"}>{sidebarOpen ? "«" : "»"}</button>
 
-        {/* MAP CONTENT HUB */}
         <div 
           style={{ 
             width: "100%", 
@@ -853,17 +886,14 @@ const TacMap: React.FC = () => {
           })}
         </div>
 
-        {/* HUD UI - Zoom Indicator */}
         {selectedMap && (
           <div style={{ position: "absolute", bottom: "20px", left: "20px", zIndex: 15, background: "rgba(0,0,0,0.6)", padding: "5px 10px", borderRadius: "4px", color: "#aaa", fontSize: "12px", pointerEvents: "none" }}>
             Zoom: {Math.round(zoom * 100)}% | Hold Space + Drag to Pan
           </div>
         )}
 
-        {/* RIGHT SIDEBAR TOGGLE BUTTON */}
         <button onClick={() => setRightSidebarOpen(!rightSidebarOpen)} style={{ position: "absolute", top: "20px", right: rightSidebarOpen ? "25px" : "20px", zIndex: 15, background: "rgba(230, 0, 130, 0.8)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(0,0,0,0.3)", transition: "right 0.3s ease, background 0.2s" }} title={rightSidebarOpen ? "Close Toolbar" : "Open Toolbar"}>{rightSidebarOpen ? "»" : "«"}</button>
 
-        {/* BRUSH SIZE SLIDER */}
         {rightSidebarOpen && (activeTool === "pen" || isSlidingBrush) && (
           <div style={{ position: "absolute", top: "65px", right: "20px", zIndex: 15, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", background: "#222", padding: "10px 6px", borderRadius: "8px", border: "1px solid #444", boxShadow: "0 4px 10px rgba(0,0,0,0.4)" }}>
             <span style={{ fontSize: "11px", color: "#aaa" }}>Size</span>
@@ -882,28 +912,33 @@ const TacMap: React.FC = () => {
         )}
       </div>
 
-      {/* RIGHT SIDEBAR (The Dynamic Toolbar) */}
+      {/* RIGHT SIDEBAR (The Dynamic Toolbar with SVG Icons) */}
       <div style={{ width: rightSidebarOpen ? "85px" : "0px", background: "#161616", borderLeft: rightSidebarOpen ? "1px solid #282828" : "none", display: "flex", flexDirection: "column", padding: rightSidebarOpen ? "20px 10px" : "0px", overflowY: "auto", overflowX: "hidden", transition: "width 0.3s ease, padding 0.3s ease", flexShrink: 0, alignItems: "center", gap: "15px", zIndex: 10 }}>
         
         {rightSidebarOpen && (
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", alignItems: "center" }}>
-              <ToolButton name="select" icon="↖️" activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "select" ? null : tool)} disabled={!selectedMap} title="Select or Move assets (S)" />
-              <ToolButton name="pen" icon="✏️" activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "pen" ? null : tool)} disabled={!selectedMap} title="Draw lines (P)" />
-              <ToolButton name="eraser" icon="🧹" activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "eraser" ? null : tool)} disabled={!selectedMap} title="Erase drawings (E)" />
+              <ToolButton name="select" icon={<SelectIcon />} activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "select" ? null : tool)} disabled={!selectedMap} title="Select or Move assets (S)" />
+              <ToolButton name="pen" icon={<PenIcon />} activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "pen" ? null : tool)} disabled={!selectedMap} title="Draw lines (P)" />
+              <ToolButton name="eraser" icon={<EraserIcon />} activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "eraser" ? null : tool)} disabled={!selectedMap} title="Erase drawings (E)" />
             </div>
 
             <div style={{ height: "1px", background: "#333", width: "100%", margin: "5px 0" }} />
 
-            {/* Undo / Redo UI Buttons */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", alignItems: "center" }}>
-              <button onClick={handleUndo} disabled={historyIndex === 0} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex === 0 ? "not-allowed" : "pointer", display: "flex", justifyContent: "center", alignItems: "center", fontSize: "20px", opacity: historyIndex === 0 ? 0.3 : 1 }} title="Undo (Ctrl+Z)">↩️</button>
-              <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex >= history.length - 1 ? "not-allowed" : "pointer", display: "flex", justifyContent: "center", alignItems: "center", fontSize: "20px", opacity: historyIndex >= history.length - 1 ? 0.3 : 1 }} title="Redo (Ctrl+Y)">↪️</button>
+              <button onClick={handleUndo} disabled={historyIndex === 0} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex === 0 ? "not-allowed" : "pointer", display: "flex", justifyContent: "center", alignItems: "center", opacity: historyIndex === 0 ? 0.3 : 1, transition: "transform 0.2s" }} title="Undo (Ctrl+Z)">
+                <UndoIcon />
+              </button>
+              <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex >= history.length - 1 ? "not-allowed" : "pointer", display: "flex", justifyContent: "center", alignItems: "center", opacity: historyIndex >= history.length - 1 ? 0.3 : 1, transition: "transform 0.2s" }} title="Redo (Ctrl+Y)">
+                <RedoIcon />
+              </button>
             </div>
 
             <div style={{ height: "1px", background: "#333", width: "100%", margin: "5px 0" }} />
 
-            <button onClick={deleteSelectedElement} disabled={!selectedElement} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: selectedElement ? "#c4302b" : "#333", color: "white", cursor: selectedElement ? "pointer" : "not-allowed", display: "flex", justifyContent: "center", alignItems: "center", fontSize: "20px", transition: "transform 0.2s, background 0.2s", transform: selectedElement ? "scale(1)" : "scale(0.95)", boxShadow: selectedElement ? "0 4px 10px rgba(196, 48, 43, 0.3)" : "none" }} title="Delete selected item (Del)">🗑️</button>
+            <button onClick={deleteSelectedElement} disabled={!selectedElement} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: selectedElement ? "#c4302b" : "#333", color: "white", cursor: selectedElement ? "pointer" : "not-allowed", display: "flex", justifyContent: "center", alignItems: "center", transition: "transform 0.2s, background 0.2s", transform: selectedElement ? "scale(1)" : "scale(0.95)", boxShadow: selectedElement ? "0 4px 10px rgba(196, 48, 43, 0.3)" : "none" }} title="Delete selected item (Del)">
+              <TrashIcon />
+            </button>
           </>
         )}
       </div>
@@ -945,7 +980,6 @@ const TacMap: React.FC = () => {
         </div>
       )}
 
-      {/* OTHER MODALS */}
       <CustomModal isOpen={isNameModalOpen} title="Strategy Name" onConfirm={finalizeSave} onCancel={() => setIsNameModalOpen(false)} confirmText="Save">
         <input type="text" value={newStrategyName} onChange={(e) => setNewStrategyName(e.target.value)} placeholder="Enter name..." style={{ width: "100%", background: "#111", color: "white", border: "1px solid #444", borderRadius: "4px", padding: "10px" }} />
       </CustomModal>

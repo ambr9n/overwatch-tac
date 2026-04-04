@@ -4,7 +4,7 @@ import { supabase } from "./Supabase";
 
 import Navbar from "./components/Navbar";
 import Startup from "./components/Startup/Startup";
-import Footer from "./components/Footer"; // <-- Import Footer
+import Footer from "./components/Footer"; // Footer import
 
 import Home from "./pages/Home";
 import TacMap from "./pages/TacMap";
@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import ProfileRedirect from "./pages/ProfileRedirect";
 import Forum from "./pages/Forum";
+import AboutUs from "./pages/AboutUs"; // About Us page
 
 const App = () => {
   const [showIntro, setShowIntro] = useState(true);
@@ -48,14 +49,13 @@ const App = () => {
               <Route path="/saves" element={<Saves />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/login" element={<Login />} />
-              {/* Redirect /profile to your own profile */}
               <Route path="/profile" element={<ProfileRedirect />} />
-              {/* Any user's profile */}
               <Route path="/profile/:uid" element={<Profile />} />
               <Route path="/forum" element={<Forum currentUser={user} />} />
+              <Route path="/about-us" element={<AboutUs />} /> {/* About Us route */}
             </Routes>
           </main>
-          <Footer /> {/* <-- Footer added here */}
+          <Footer /> {/* Footer is now at the bottom of the page */}
         </div>
       </Router>
     </>

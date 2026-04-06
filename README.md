@@ -10,14 +10,6 @@ A tactical analysis and visualization tool for Overwatch built with TypeScript, 
 - **Responsive Design** - Optimized for desktop and mobile viewing
 - **Tactical Insights** - Strategic recommendations based on collected data
 
-## 💻 Tech Stack
-
-- **TypeScript** (94.3%) - Core application logic
-- **CSS** (4.1%) - Styling and design
-- **JavaScript** (1.3%) - Additional scripting
-- **React** - UI framework
-- **Node.js** - Runtime environment
-
 ## 📦 Installation
 
 Clone the repository:

@@ -82,7 +82,7 @@ const Navbar: FC = () => {
         ) : (
           <>
             <NavLink to="/auth" className="nav-link signup">Sign Up</NavLink>
-            <NavLink to="/login" className="nav-link login">Sign In</NavLink>
+            <NavLink to="/login" className="nav-link login">Log In</NavLink>
           </>
         )}
       </div>

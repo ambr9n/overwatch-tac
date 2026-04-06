@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../Supabase";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, NavLink } from "react-router-dom";
 
 const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState(""); // email or username
@@ -13,6 +13,7 @@ const Login: React.FC = () => {
     try {
       let emailToUse = identifier;
 
+      // Logic to allow login via Username by fetching the associated email
       if (!identifier.includes("@")) {
         const { data: userRow, error: fetchError } = await supabase
           .from("Users")
@@ -29,7 +30,7 @@ const Login: React.FC = () => {
         emailToUse = userRow.email;
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: emailToUse,
         password,
       });
@@ -53,15 +54,15 @@ const Login: React.FC = () => {
         color: "white",
         textAlign: "center",
         boxShadow: "0 0 20px #e6008233",
+        fontFamily: "sans-serif",
       }}
     >
-      <h2 style={{ fontSize: "28px", marginBottom: "30px", color: "#f65dfb" }}>
-        Login
+      <h2 style={{ fontSize: "24px", color: "#e60082", marginBottom: "20px" }}>
+        Welcome Back
       </h2>
-
       <form
         onSubmit={handleLogin}
-        style={{ display: "flex", flexDirection: "column", gap: "18px" }}
+        style={{ display: "flex", flexDirection: "column", gap: "15px" }}
       >
         <input
           type="text"
@@ -102,6 +103,7 @@ const Login: React.FC = () => {
             color: "white",
             cursor: "pointer",
             transition: "all 0.2s ease-in-out",
+            marginTop: "10px"
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = "#f65dfb";
@@ -110,8 +112,22 @@ const Login: React.FC = () => {
             (e.currentTarget as HTMLButtonElement).style.background = "#e60082";
           }}
         >
-          Login
+          Log In
         </button>
+
+        <div style={{ marginTop: "15px", fontSize: "14px", color: "#888" }}>
+          Don't have an account?{" "}
+          <NavLink 
+            to="/auth" 
+            style={{ 
+              color: "#f65dfb", 
+              textDecoration: "none", 
+              fontWeight: "bold" 
+            }}
+          >
+            Sign Up
+          </NavLink>
+        </div>
       </form>
     </div>
   );

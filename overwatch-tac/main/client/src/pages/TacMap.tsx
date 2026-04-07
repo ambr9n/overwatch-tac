@@ -3,7 +3,10 @@ import { supabase } from "../Supabase";
 import { useSearchParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
-/** * TYPES & INTERFACES */
+/**
+ * TYPES & INTERFACES
+ * Core data structures for the map system, assets, and history tracking.
+ */
 type Team = "ally" | "enemy";
 type GameMode = "Control" | "Escort" | "Hybrid" | "Push" | "Flashpoint" | "Clash" | "Assault";
 type ToolType = "select" | "pen" | "eraser";
@@ -45,6 +48,10 @@ interface HistoryState {
   drawings: DrawingLine[];
 }
 
+/**
+ * REUSABLE COMPONENTS
+ * Modal and button components for UI consistency.
+ */
 interface CustomModalProps {
   isOpen: boolean;
   title: string;
@@ -215,9 +222,11 @@ const TacMap: React.FC = () => {
 
   const [isMapSelectorOpen, setIsMapSelectorOpen] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
+  const [isDuplicateNameModalOpen, setIsDuplicateNameModalOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
+  
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -230,6 +239,9 @@ const TacMap: React.FC = () => {
   const allyMarkers = useMemo(() => markers.filter(m => m.team === "ally"), [markers]);
   const enemyMarkers = useMemo(() => markers.filter(m => m.team === "enemy"), [markers]);
 
+  /** * DATA FETCHING 
+   * Initial data population for maps and available hero assets.
+   */
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -243,6 +255,19 @@ const TacMap: React.FC = () => {
     fetchData();
   }, []);
 
+  /** * MAP CHANGE CLEANUP
+   * Ensures that changing the map clears all existing assets, drawings, and history.
+   */
+  useEffect(() => {
+    if (selectedMap) {
+      setMarkers([]);
+      setDrawings([]);
+      setHistory([{ markers: [], drawings: [] }]);
+      setHistoryIndex(0);
+      setSelectedElement(null);
+    }
+  }, [selectedMap]);
+
   useEffect(() => {
     if (loadId && mapList.length > 0 && heroAssets.length > 0 && !isDataLoaded) {
       loadSavedStrategy(loadId);
@@ -254,6 +279,9 @@ const TacMap: React.FC = () => {
     drawCanvas();
   }, [drawings, selectedElement, activeTool, mousePos, brushSize, isSlidingBrush]);
 
+  /** * HISTORY SYSTEM
+   * Handles undo/redo snapshots to allow workflow reversion.
+   */
   const pushToHistory = (newMarkers: Marker[], newDrawings: DrawingLine[]) => {
     const nextState = { markers: newMarkers, drawings: newDrawings };
     const updatedHistory = history.slice(0, historyIndex + 1);
@@ -285,6 +313,9 @@ const TacMap: React.FC = () => {
     }
   };
 
+  /** * KEYBOARD LISTENERS
+   * Shortcuts for tools, panning, and history management.
+   */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === ' ' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
@@ -338,6 +369,9 @@ const TacMap: React.FC = () => {
     };
   }, [historyIndex, history, selectedElement, selectedMap]);
 
+  /** * CANVAS RENDERING
+   * Drawing engine for tactics and line previewing.
+   */
   const drawCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -400,6 +434,9 @@ const TacMap: React.FC = () => {
     }
   };
 
+  /** * PERSISTENCE
+   * Strategies for loading and syncing map data with Supabase.
+   */
   const loadSavedStrategy = async (id: string) => {
     setLoading(true);
     try {
@@ -522,6 +559,9 @@ const TacMap: React.FC = () => {
     }
   };
 
+  /** * INTERACTION HANDLERS
+   * Logic for dragging, dropping, and element selection.
+   */
   const clearCanvas = () => {
     setDrawings([]);
     setMarkers([]);
@@ -544,8 +584,12 @@ const TacMap: React.FC = () => {
     if (!assetData) return;
     const asset = JSON.parse(assetData);
     const coords = getCoords(e);
-    const currentTeamCount = activeTeam === "ally" ? allyMarkers.length : enemyMarkers.length;
-    if (currentTeamCount >= 5) return;
+    
+    // VALIDATION: Prevent more than 5 per team and prevent duplicate heroes per team
+    const teamMarkers = activeTeam === "ally" ? allyMarkers : enemyMarkers;
+    if (teamMarkers.length >= 5) return;
+    if (teamMarkers.some(m => m.heroName === asset.name)) return;
+
     const newMarker: Marker = {
       id: Date.now(), x: coords.x, y: coords.y,
       team: activeTeam, type: "asset", iconUrl: asset.image_path, heroName: asset.name
@@ -769,7 +813,7 @@ const TacMap: React.FC = () => {
   return (
     <div style={{ color: "white", backgroundColor: "#111", position: "fixed", top: "60px", left: 0, height: "calc(100vh - 60px)", width: "100vw", display: "flex", overflow: "hidden", zIndex: 50 }}>
       
-      {/* LEFT SIDEBAR */}
+      {/* LEFT SIDEBAR: CONFIGURATION AND ASSETS */}
       <div style={{ 
         width: sidebarOpen ? "350px" : "0px", background: "#161616", 
         borderRight: sidebarOpen ? "1px solid #282828" : "none", display: "flex", 
@@ -808,18 +852,31 @@ const TacMap: React.FC = () => {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", overflowY: "auto", flexGrow: 1 }}>
-              {heroAssets.filter(h => h.hero_roles === activeRoleTab).map(asset => (
-                  <div key={asset.asset_id} draggable={!!selectedMap} onDragStart={(e) => e.dataTransfer.setData("assetData", JSON.stringify(asset))} style={{ cursor: selectedMap ? "grab" : "not-allowed", textAlign: "center", padding: "5px", background: "#333", borderRadius: "4px", border: "1px solid #444" }}>
-                    <img src={asset.image_path} alt={asset.name} style={{ width: "50px", height: "50px", borderRadius: "4px" }} />
-                    <div style={{ fontSize: "10px", marginTop: "4px" }}>{asset.name}</div>
-                  </div>
-              ))}
+              {heroAssets.filter(h => h.hero_roles === activeRoleTab).map(asset => {
+                  const isOnCurrentTeam = (activeTeam === "ally" ? allyMarkers : enemyMarkers).some(m => m.heroName === asset.name);
+                  return (
+                    <div 
+                      key={asset.asset_id} 
+                      draggable={!!selectedMap && !isOnCurrentTeam} 
+                      onDragStart={(e) => e.dataTransfer.setData("assetData", JSON.stringify(asset))} 
+                      style={{ 
+                        cursor: (selectedMap && !isOnCurrentTeam) ? "grab" : "not-allowed", 
+                        textAlign: "center", padding: "5px", background: "#333", 
+                        borderRadius: "4px", border: "1px solid #444",
+                        opacity: isOnCurrentTeam ? 0.3 : 1
+                      }}
+                    >
+                      <img src={asset.image_path} alt={asset.name} style={{ width: "50px", height: "50px", borderRadius: "4px" }} />
+                      <div style={{ fontSize: "10px", marginTop: "4px" }}>{asset.name}</div>
+                    </div>
+                  );
+              })}
             </div>
           </div>
         </div>
       </div>
 
-      {/* RIGHT MAIN AREA (THE VIEWPORT) */}
+      {/* VIEWPORT: INTERACTIVE TACTICAL OVERLAY */}
       <div 
         ref={mapRef} 
         onWheel={handleWheel}
@@ -924,9 +981,8 @@ const TacMap: React.FC = () => {
         )}
       </div>
 
-      {/* RIGHT SIDEBAR (The Dynamic Toolbar with SVG Icons) */}
-      <div style={{ width: rightSidebarOpen ? "85px" : "0px", background: "#161616", borderLeft: rightSidebarOpen ? "1px solid #282828" : "none", display: "flex", flexDirection: "column", padding: rightSidebarOpen ? "20px 10px" : "0px", overflowY: "auto", overflowX: "hidden", transition: "width 0.3s ease, padding 0.3s ease", flexShrink: 0, alignItems: "center", gap: "15px", zIndex: 10 }}>
-        
+      {/* TOOLBAR: DRAWING AND EDITING UTILITIES */}
+      <div style={{ width: rightSidebarOpen ? "85px" : "0px", background: "#161616", borderLeft: rightSidebarOpen ? "1px solid #282828" : "none", display: "flex", flexDirection: "column", padding: rightSidebarOpen ? "20px 10px" : "0px", overflow: "hidden", transition: "width 0.3s ease", flexShrink: 0, alignItems: "center", gap: "15px", zIndex: 10 }}>
         {rightSidebarOpen && (
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", alignItems: "center" }}>
@@ -955,7 +1011,7 @@ const TacMap: React.FC = () => {
         )}
       </div>
 
-      {/* MAP SELECTOR MODAL WITH HOVER PREVIEW */}
+      {/* MODAL INTERLAYS */}
       {isMapSelectorOpen && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
           <div style={{ background: "#161616", padding: "30px", borderRadius: "12px", border: "1px solid #282828", boxShadow: "0 0 30px rgba(230, 0, 130, 0.2)", width: "800px", maxWidth: "90vw", maxHeight: "80vh", display: "flex", flexDirection: "column", position: "relative" }}>
@@ -967,7 +1023,7 @@ const TacMap: React.FC = () => {
                   <h4 style={{ margin: "0 0 10px 0", color: "#aaa" }}>1. Game Mode</h4>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {gameModes.map((mode) => (
-                      <button key={mode} onClick={() => { setSelectedMode(selectedMode === mode ? null : mode); setSelectedMap(null); setHoveredMap(null); }} style={{ padding: "8px 12px", background: selectedMode === mode ? "#e60082" : "#333", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "13px" }}>{mode}</button>
+                      <button key={mode} onClick={() => { setSelectedMode(selectedMode === mode ? null : mode); }} style={{ padding: "8px 12px", background: selectedMode === mode ? "#e60082" : "#333", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>{mode}</button>
                     ))}
                   </div>
                 </div>
@@ -991,6 +1047,10 @@ const TacMap: React.FC = () => {
           </div>
         </div>
       )}
+
+      <CustomModal isOpen={isDuplicateNameModalOpen} title="Name Already Exists" onConfirm={() => { setIsDuplicateNameModalOpen(false); setIsNameModalOpen(true); }} showCancel={false} confirmText="Try Different Name">
+        <p style={{ color: "#aaa" }}>You already have a strategy named "<strong>{newStrategyName}</strong>". Please choose a unique name.</p>
+      </CustomModal>
 
       <CustomModal isOpen={isNameModalOpen} title="Strategy Name" onConfirm={finalizeSave} onCancel={() => setIsNameModalOpen(false)} confirmText="Save">
         <input type="text" value={newStrategyName} onChange={(e) => setNewStrategyName(e.target.value)} placeholder="Enter name..." style={{ width: "100%", background: "#111", color: "white", border: "1px solid #444", borderRadius: "4px", padding: "10px" }} />

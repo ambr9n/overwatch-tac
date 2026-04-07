@@ -1,311 +1,222 @@
 import React, { useEffect, useState } from "react";
-import { useParams, NavLink } from "react-router-dom";
+import { useParams, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "../Supabase";
-
-/**
- * PROFILE COMPONENT
- * Handles user profiles, follow/unfollow logic, account settings updates,
- * and displaying user-specific forum posts and nested replies.
- */
 
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
-// --- REUSABLE COMPONENTS ---
-
 /**
- * CustomModal: A styled popup for success messages or confirmations.
- * Replaces standard window.alert() for a more cohesive UI.
+ * CUSTOM MODAL COMPONENT (Direct Copy from Forum.tsx)
  */
-interface CustomModalProps {
+const CustomModal: React.FC<{
   isOpen: boolean;
   title: string;
   children?: React.ReactNode;
   onConfirm: () => void;
+  onCancel: () => void;
   confirmText?: string;
-}
-
-const CustomModal: React.FC<CustomModalProps> = ({ 
-  isOpen, title, children, onConfirm, confirmText = "OK" 
-}) => {
+  confirmColor?: string;
+}> = ({ isOpen, title, children, onConfirm, onCancel, confirmText = "OK", confirmColor = "#e60082" }) => {
   if (!isOpen) return null;
   return (
     <div style={{
       position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
       backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", 
-      justifyContent: "center", alignItems: "center", zIndex: 2000,
+      justifyContent: "center", alignItems: "center", zIndex: 1000,
       backdropFilter: "blur(4px)"
     }}>
       <div style={{
         background: "#161616", padding: "30px", borderRadius: "12px",
-        border: "1px solid #282828", boxShadow: "0 0 30px rgba(221, 101, 251, 0.2)",
+        border: "1px solid #282828", boxShadow: `0 0 30px ${confirmColor}33`,
         width: "400px", textAlign: "center"
       }}>
-        <h3 style={{ color: "#dd65fb", marginBottom: "20px", fontSize: "22px", fontWeight: "750" }}>{title}</h3>
-        <div style={{ marginBottom: "25px", color: "#aaa" }}>{children}</div>
-        <button onClick={onConfirm} style={{
-          background: "#dd65fb", color: "white", border: "none",
-          padding: "10px 24px", borderRadius: "6px", cursor: "pointer", 
-          fontWeight: "bold", boxShadow: "0 4px 10px rgba(221, 101, 251, 0.3)"
-        }}>{confirmText}</button>
+        <h3 style={{ color: "#f65dfb", marginBottom: "20px", fontSize: "22px", fontWeight: "750" }}>{title}</h3>
+        <div style={{ marginBottom: "25px", color: "#aaa", fontSize: "14px", lineHeight: "1.5" }}>{children}</div>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          <button onClick={onCancel} style={{
+            background: "transparent", color: "#888", border: "1px solid #444",
+            padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold"
+          }}>Cancel</button>
+          <button onClick={onConfirm} style={{
+            background: confirmColor, color: "white", border: "none",
+            padding: "10px 24px", borderRadius: "6px", cursor: "pointer", 
+            fontWeight: "bold", boxShadow: `0 4px 10px ${confirmColor}4d`
+          }}>{confirmText}</button>
+        </div>
       </div>
     </div>
   );
 };
 
-// --- INTERFACES ---
-
-interface ForumReply {
-  reply_id: string;
-  post_id: string;
-  user_id: string;
-  text: string;
-  created_at: string;
-  is_deleted: boolean;
-  parent_reply_id?: string;
-  Users: { username: string; profile_image_link: string };
-  Reply_Likes: { user_id: string }[];
-  Reply_Dislikes: { user_id: string }[];
-}
-
-interface ForumPost {
-  post_id: string;
-  user_id: string;
-  text: string;
-  created_at: string;
-  is_deleted: boolean;
-  Users: { username: string; profile_image_link: string };
-  Post_Likes: { user_id: string }[];
-  Post_Dislikes: { user_id: string }[];
-  Forum_Replies: ForumReply[];
-}
-
-interface UserProfile {
-  user_id: string;
-  username: string;
-  email?: string;
-  profile_image_link: string;
-  bio?: string;
-}
-
 export default function Profile() {
   const { uid } = useParams<{ uid: string }>();
-  
-  // State for User & Profile Data
+  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [posts, setPosts] = useState<ForumPost[]>([]);
-  
-  // Settings & Edit States
-  const [showSettings, setShowSettings] = useState(false);
-  const [profileImageUrl, setProfileImageUrl] = useState("");
-  const [bio, setBio] = useState("");
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false); // Success popup state
-
-  // Forum Interactivity States
+  const [enrichedUser, setEnrichedUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
-  const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
 
-  // Follow System States
-  const [isFollowing, setIsFollowing] = useState<boolean>(false);
-  const [followerCount, setFollowerCount] = useState(0);
-  const [followingCount, setFollowingCount] = useState(0);
-  const [showFollowersModal, setShowFollowersModal] = useState(false);
-  const [showFollowingModal, setShowFollowingModal] = useState(false);
-  const [followersList, setFollowersList] = useState<UserProfile[]>([]);
-  const [followingList, setFollowingList] = useState<UserProfile[]>([]);
-  const [currentUserFollowingIds, setCurrentUserFollowingIds] = useState<string[]>([]);
+  // --- SETTINGS STATE ---
+  const [showSettings, setShowSettings] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [newBio, setNewBio] = useState("");
+  const [newAvatar, setNewAvatar] = useState("");
 
-  // --- DATA FETCHING ---
-
-  /** Checks which users the logged-in user follows to style "Follow" buttons */
-  const fetchCurrentUserRelations = async (authId: string) => {
-    const { data } = await supabase.from("User_Follows").select("following_id").eq("follower_id", authId);
-    if (data) setCurrentUserFollowingIds(data.map((f) => f.following_id));
-  };
-
-  /** Gets counts and current follow status for the viewed profile */
-  const fetchFollowData = async (userId: string, currentUserId?: string) => {
-    const { data: followers } = await supabase.from("User_Follows").select("follower_id").eq("following_id", userId);
-    const { data: following } = await supabase.from("User_Follows").select("following_id").eq("follower_id", userId);
-
-    setFollowerCount(followers?.length || 0);
-    setFollowingCount(following?.length || 0);
-
-    if (currentUserId) {
-      setIsFollowing(followers?.some((f) => f.follower_id === currentUserId) || false);
-      await fetchCurrentUserRelations(currentUserId);
-    }
-  };
-
-  const fetchFollowersList = async (userId: string) => {
-    const { data } = await supabase
-      .from("User_Follows")
-      .select("follower:Users!fk_follower(user_id, username, profile_image_link)")
-      .eq("following_id", userId);
-    if (data) setFollowersList(data.map((f: any) => f.follower).filter(Boolean));
-    setShowFollowersModal(true);
-  };
-
-  const fetchFollowingList = async (userId: string) => {
-    const { data } = await supabase
-      .from("User_Follows")
-      .select("following:Users!fk_following(user_id, username, profile_image_link)")
-      .eq("follower_id", userId);
-    if (data) setFollowingList(data.map((f: any) => f.following).filter(Boolean));
-    setShowFollowingModal(true);
-  };
-
-  /** Main profile data fetcher */
-  const fetchProfile = async (userId: string, currentUserId?: string) => {
-    const { data, error } = await supabase.from("Users").select("*").eq("user_id", userId).maybeSingle();
-    if (!error && data) {
-      setProfile(data);
-      setProfileImageUrl(data.profile_image_link || "");
-      setBio(data.bio || "");
-    }
-    await fetchFollowData(userId, currentUserId);
-  };
-
-  /** Fetches all posts by this user including nested replies and likes */
-  const fetchPosts = async (userId: string) => {
-    const { data } = await supabase
-      .from("Forum_Posts")
-      .select(`
-        post_id, user_id, text, created_at, is_deleted,
-        Users (username, profile_image_link),
-        Post_Likes (user_id),
-        Post_Dislikes (user_id), 
-        Forum_Replies (
-          reply_id, user_id, text, created_at, is_deleted, parent_reply_id,
-          Users (username, profile_image_link),
-          Reply_Likes (user_id),
-          Reply_Dislikes (user_id)
-        )
-      `)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    setPosts((data as any) || []);
-  };
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
+    isOpen: false,
+    type: 'post',
+    id: null
+  });
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        const { data: userData } = await supabase.from("Users").select("*").eq("user_id", user.id).maybeSingle();
+        setEnrichedUser(userData);
+      }
       const profileId = uid || user?.id;
       if (profileId) {
-        await fetchProfile(profileId, user?.id);
-        await fetchPosts(profileId);
+        const { data: pData } = await supabase.from("Users").select("*").eq("user_id", profileId).maybeSingle();
+        setProfile(pData);
+        if (pData) {
+            setNewUsername(pData.username || "");
+            setNewBio(pData.bio || "");
+            setNewAvatar(pData.profile_image_link || "");
+        }
+        fetchPosts(profileId);
       }
     };
     init();
   }, [uid]);
 
-  const isOwnProfile = currentUser?.id === profile?.user_id;
-
-  // --- HANDLERS ---
-
-  const handleFollowToggle = async (targetUserId: string) => {
-    if (!currentUser) return;
-    const isCurrentlyFollowing = currentUserFollowingIds.includes(targetUserId);
-    if (isCurrentlyFollowing) {
-      await supabase.from("User_Follows").delete().eq("follower_id", currentUser.id).eq("following_id", targetUserId);
-      setCurrentUserFollowingIds((prev) => prev.filter((id) => id !== targetUserId));
-    } else {
-      await supabase.from("User_Follows").insert([{ follower_id: currentUser.id, following_id: targetUserId }]);
-      setCurrentUserFollowingIds((prev) => [...prev, targetUserId]);
-    }
-    if (profile && targetUserId === profile.user_id) {
-      setIsFollowing(!isCurrentlyFollowing);
-      fetchFollowData(profile.user_id, currentUser.id);
-    }
+  const fetchPosts = async (userId: string) => {
+    const { data } = await supabase.from("Forum_Posts")
+      .select(`post_id, user_id, text, created_at, is_deleted, Users (username, profile_image_link, is_mod), Post_Likes (user_id), Post_Dislikes (user_id), Forum_Replies (reply_id, user_id, text, created_at, is_deleted, parent_reply_id, Users (username, profile_image_link, is_mod), Reply_Likes (user_id), Reply_Dislikes (user_id))`)
+      .eq("user_id", userId).order("created_at", { ascending: false });
+    setPosts((data as any) || []);
   };
 
   const handleUpdateProfile = async () => {
-    if (!profile) return;
-    const { error } = await supabase
-      .from("Users")
-      .update({ 
-        profile_image_link: profileImageUrl,
-        bio: bio 
-      })
-      .eq("user_id", profile.user_id);
+    if (!currentUser) return;
+    const { error } = await supabase.from("Users").update({
+      username: newUsername,
+      bio: newBio,
+      profile_image_link: newAvatar
+    }).eq("user_id", currentUser.id);
 
     if (!error) {
-      setProfile({ ...profile, profile_image_link: profileImageUrl, bio: bio });
       setShowSettings(false);
-      setIsUpdateModalOpen(true); // Triggers custom success popup
+      window.location.reload();
     }
   };
 
-  // --- SUB-COMPONENTS (RENDER HELPERS) ---
-
-  const AuthorHeader = ({ user, userId, createdAt }: any) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <NavLink to={`/profile/${userId}`}>
-        <img src={user?.profile_image_link || DEFAULT_AVATAR} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} alt="Avatar" />
-      </NavLink>
-      <div>
-        <div style={{ fontWeight: "bold" }}>
-          <NavLink to={`/profile/${userId}`} style={{ color: "white", textDecoration: "none" }}>{user?.username}</NavLink>
-        </div>
-        <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
-      </div>
-    </div>
-  );
-
-  const ModalUserRow = ({ user }: { user: UserProfile }) => {
-    const isFollowingThisUser = currentUserFollowingIds.includes(user.user_id);
-    const isMe = currentUser?.id === user.user_id;
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <NavLink to={`/profile/${user.user_id}`} onClick={() => { setShowFollowersModal(false); setShowFollowingModal(false); }} style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", color: "white" }}>
-          <img src={user.profile_image_link || DEFAULT_AVATAR} style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} alt={user.username} />
-          <span style={{ fontWeight: "500" }}>{user.username}</span>
-        </NavLink>
-        {!isMe && currentUser && (
-          <button onClick={() => handleFollowToggle(user.user_id)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: isFollowingThisUser ? "1px solid #444" : "none", background: isFollowingThisUser ? "transparent" : "#dd65fbff", color: "white" }}>
-            {isFollowingThisUser ? "Unfollow" : "Follow"}
-          </button>
-        )}
-      </div>
-    );
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+    window.location.reload();
   };
 
-  const UserModal = ({ isOpen, onClose, title, list }: { isOpen: boolean; onClose: () => void; title: string; list: UserProfile[] }) => {
-    if (!isOpen) return null;
+  const handlePostAction = async (postId: string, type: 'like' | 'dislike') => {
+    if (!currentUser) return;
+    const table = type === 'like' ? 'Post_Likes' : 'Post_Dislikes';
+    const other = type === 'like' ? 'Post_Dislikes' : 'Post_Likes';
+    await supabase.from(other).delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    const { data: existing } = await supabase.from(table).select('*').eq('post_id', postId).eq('user_id', currentUser.id).maybeSingle();
+    if (existing) await supabase.from(table).delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    else await supabase.from(table).insert([{ post_id: postId, user_id: currentUser.id }]);
+    fetchPosts(profile.user_id);
+  };
+
+  const handleReplyAction = async (replyId: string, type: 'like' | 'dislike') => {
+    if (!currentUser) return;
+    const table = type === 'like' ? 'Reply_Likes' : 'Reply_Dislikes';
+    const other = type === 'like' ? 'Reply_Dislikes' : 'Reply_Likes';
+    await supabase.from(other).delete().eq('reply_id', replyId).eq('user_id', currentUser.id);
+    const { data: existing } = await supabase.from(table).select('*').eq('reply_id', replyId).eq('user_id', currentUser.id).maybeSingle();
+    if (existing) await supabase.from(table).delete().eq('reply_id', replyId).eq('user_id', currentUser.id);
+    else await supabase.from(table).insert([{ reply_id: replyId, user_id: currentUser.id }]);
+    fetchPosts(profile.user_id);
+  };
+
+  const handleInsertReply = async (postId: string) => {
+    if (!replyText[postId]?.trim() || !currentUser) return;
+    const payload: any = { post_id: postId, user_id: currentUser.id, text: replyText[postId] };
+    if (replyingTo?.postId === postId) payload.parent_reply_id = replyingTo.replyId;
+    const { error } = await supabase.from("Forum_Replies").insert([payload]);
+    if (!error) {
+      setReplyText({ ...replyText, [postId]: "" });
+      setReplyingTo(null);
+      fetchPosts(profile.user_id);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModal.id) return;
+    if (deleteModal.type === 'post') {
+      const { error } = await supabase.from("Forum_Posts").delete().eq("post_id", deleteModal.id);
+      if (!error && profile) fetchPosts(profile.user_id);
+    } else {
+      const { error } = await supabase.from("Forum_Replies").delete().eq("reply_id", deleteModal.id);
+      if (!error && profile) fetchPosts(profile.user_id);
+    }
+    setDeleteModal({ isOpen: false, type: 'post', id: null });
+  };
+
+  const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
+    const userData = Array.isArray(user) ? user[0] : user;
     return (
-      <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1100 }}>
-        <div style={{ background: "#111", padding: 24, borderRadius: 12, width: 380, border: "1px solid #333", maxHeight: "70vh", overflowY: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20, alignItems: "center" }}>
-            <h3 style={{ margin: 0 }}>{title}</h3>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 20 }}>✕</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center', width: '100%' }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <NavLink to={`/profile/${userId}`}>
+            <img src={userData?.profile_image_link || DEFAULT_AVATAR} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover' }} alt="avatar" />
+          </NavLink>
+          <div>
+            <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
+              {userData?.is_mod && (
+                <span style={{ 
+                  background: "linear-gradient(45deg, #e60082, #f65dfb)", 
+                  fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white',
+                  fontWeight: 'bold', textTransform: 'uppercase',
+                  position: "relative", top: "-2px"
+                }}>MOD</span>
+              )}
+              <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>{userData?.username}</NavLink>
+            </div>
+            <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
-          {list.length === 0 ? <p style={{ color: "#555", textAlign: "center" }}>No users found.</p> : list.map((u) => <ModalUserRow key={u.user_id} user={u} />)}
         </div>
+        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>🗑️</button>}
       </div>
     );
   };
 
-  /** Recursive component to render threaded replies */
   const RenderReplies = ({ allReplies, parentId, postId, depth = 0 }: any) => {
     const children = allReplies.filter((r: any) => r.parent_reply_id === parentId);
     if (!children.length) return null;
     return (
       <div style={{ marginLeft: depth > 0 ? 20 : 0, borderLeft: depth > 0 ? "2px solid #222" : "none", paddingLeft: depth > 0 ? 15 : 0 }}>
         {children.map((reply: any) => {
-          const isLiked = reply.Reply_Likes.some((l: any) => l.user_id === currentUser?.id);
-          const isDisliked = reply.Reply_Dislikes.some((d: any) => d.user_id === currentUser?.id);
+          const isLiked = reply.Reply_Likes?.some((l: any) => l.user_id === currentUser?.id);
+          const isDisliked = reply.Reply_Dislikes?.some((d: any) => d.user_id === currentUser?.id);
           return (
-            <div key={reply.reply_id} style={{ marginTop: 12, background: "#111", padding: 14, borderRadius: 12, border: "1px solid #222" }}>
-              <AuthorHeader user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} />
-              <p style={{ fontSize: 14, color: "#ccc", margin: "8px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={async () => { /* Like Logic */ fetchPosts(profile!.user_id); }} style={{ background: isLiked ? "#dd65fb33" : "#222", color: "white", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}>👍 {reply.Reply_Likes.length}</button>
-                <button onClick={async () => { /* Dislike Logic */ fetchPosts(profile!.user_id); }} style={{ background: isDisliked ? "#ef444433" : "#222", color: "white", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer" }}>👎 {reply.Reply_Dislikes.length}</button>
-                <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users.username })} style={{ background: "none", border: "none", color: "#dd65fb", cursor: "pointer", fontSize: 12 }}>Reply</button>
+            <div key={reply.reply_id} style={{ marginTop: 15, background: "#111", padding: 16, borderRadius: 12, border: "1px solid #222" }}>
+              <AuthorHeader 
+                user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} 
+                showDelete={enrichedUser?.is_mod || currentUser?.id === reply.user_id} 
+                onDelete={() => setDeleteModal({ isOpen: true, type: 'reply', id: reply.reply_id })} 
+              />
+              <p style={{ fontSize: 14, color: "#ccc", margin: "14px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
+              
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <button onClick={() => handleReplyAction(reply.reply_id, 'like')} style={{ background: isLiked ? "#dd65fb33" : "#222", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
+                <button onClick={() => handleReplyAction(reply.reply_id, 'dislike')} style={{ background: isDisliked ? "#ef444433" : "#222", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
+                <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users?.username })} style={{ background: 'none', border: 'none', color: '#dd65fb', cursor: 'pointer', fontSize: 12 }}>Reply</button>
               </div>
+
               <RenderReplies allReplies={allReplies} parentId={reply.reply_id} postId={postId} depth={depth + 1} />
             </div>
           );
@@ -314,92 +225,111 @@ export default function Profile() {
     );
   };
 
-  if (!profile) return <div style={{ textAlign: "center", marginTop: 60, color: "white" }}>Loading profile...</div>;
+  if (!profile) return null;
 
   return (
-    <div style={{ maxWidth: 850, margin: "80px auto", padding: 20, color: "white", fontFamily: "sans-serif" }}>
+    <div style={{ maxWidth: 850, margin: "80px auto", padding: 20, color: "white", fontFamily: 'sans-serif' }}>
       
-      {/* 1. SUCCESS POPUP (Custom Alert Replacement) */}
+      {/* DELETE MODAL */}
       <CustomModal 
-        isOpen={isUpdateModalOpen} 
-        title="Profile Updated!" 
-        onConfirm={() => setIsUpdateModalOpen(false)}
-        confirmText="Done"
+        isOpen={deleteModal.isOpen} 
+        title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} 
+        confirmText="Delete Forever" 
+        confirmColor="#ff4d4d" 
+        onConfirm={confirmDelete} 
+        onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}
       >
-        <p>Your account settings have been successfully updated.</p>
+        {deleteModal.type === 'post' ? "Are you sure? This will permanently delete this post and ALL replies." : "Are you sure? This will permanently delete this reply and all sub-replies."}
       </CustomModal>
 
-      {/* 2. PROFILE HEADER */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 30 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-          <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: "50%", objectFit: "cover", border: "2px solid #333" }} alt="Avatar" />
-          <div>
-            <h2 style={{ margin: 0 }}>{profile.username}</h2>
-            <div style={{ display: "flex", gap: 15, marginTop: 8 }}>
-              <span onClick={() => fetchFollowersList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#dd65fb" }}>{followerCount}</strong> Followers</span>
-              <span onClick={() => fetchFollowingList(profile.user_id)} style={{ cursor: "pointer", fontSize: 14 }}><strong style={{ color: "#dd65fb" }}>{followingCount}</strong> Following</span>
+      {/* SETTINGS POPUP MODAL */}
+      <CustomModal
+        isOpen={showSettings}
+        title="Account Settings"
+        confirmText="Save Changes"
+        onConfirm={handleUpdateProfile}
+        onCancel={() => setShowSettings(false)}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 15, textAlign: 'left' }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 5 }}>Username</label>
+              <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} style={{ width: "94%", padding: 10, background: "#000", border: "1px solid #333", borderRadius: 6, color: "white" }} />
             </div>
-            {profile.bio && <p style={{ marginTop: 12, color: "#aaa", fontSize: 14, maxWidth: 500, lineHeight: "1.4", whiteSpace: "pre-wrap" }}>{profile.bio}</p>}
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 5 }}>Avatar URL</label>
+              <input type="text" value={newAvatar} onChange={(e) => setNewAvatar(e.target.value)} style={{ width: "94%", padding: 10, background: "#000", border: "1px solid #333", borderRadius: 6, color: "white" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 5 }}>Bio</label>
+              <textarea value={newBio} onChange={(e) => setNewBio(e.target.value)} style={{ width: "94%", padding: 10, background: "#000", border: "1px solid #333", borderRadius: 6, color: "white", minHeight: 80, resize: 'none' }} />
+            </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #282828', margin: '10px 0' }} />
+            <button 
+                onClick={handleLogout}
+                style={{ background: "#ff4d4d22", color: "#ff4d4d", border: "1px solid #ff4d4d", padding: "10px", borderRadius: 8, cursor: "pointer", fontWeight: "bold" }}
+            >
+                Log Out
+            </button>
+        </div>
+      </CustomModal>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: "50%", border: "2px solid #333", objectFit: 'cover' }} />
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {profile.is_mod && <span style={{ background: "linear-gradient(45deg, #e60082, #f65dfb)", fontSize: 12, padding: "3px 8px", borderRadius: 4, color: 'white', fontWeight: 'bold', textTransform: 'uppercase' }}>MOD</span>}
+              <h2 style={{ margin: 0 }}>{profile.username}</h2>
+            </div>
+            <p style={{ color: "#aaa", marginTop: 8 }}>{profile.bio}</p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          {!isOwnProfile && <button onClick={() => handleFollowToggle(profile.user_id)} style={{ padding: "8px 24px", borderRadius: 8, background: isFollowing ? "#1a1a1a" : "#dd65fb", color: "white", border: isFollowing ? "1px solid #333" : "none", cursor: "pointer", fontWeight: "bold" }}>{isFollowing ? "Unfollow" : "Follow"}</button>}
-          {isOwnProfile && <button onClick={() => setShowSettings(true)} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "8px 12px", borderRadius: 8, cursor: "pointer" }}>Settings ⚙️</button>}
-        </div>
+        
+        {/* GEAR ICON TOGGLE (Only for owner) */}
+        {currentUser?.id === profile.user_id && (
+          <button 
+            onClick={() => setShowSettings(true)}
+            style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: '20px' }}
+          >
+            ⚙️
+          </button>
+        )}
       </div>
 
-      {/* 3. MODALS FOR FOLLOWERS/FOLLOWING */}
-      <UserModal isOpen={showFollowersModal} onClose={() => setShowFollowersModal(false)} title="Followers" list={followersList} />
-      <UserModal isOpen={showFollowingModal} onClose={() => setShowFollowingModal(false)} title="Following" list={followingList} />
-
-      {/* 4. SETTINGS DRAWER/MODAL */}
-      {showSettings && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
-          <div style={{ background: "#111", padding: 30, borderRadius: 12, width: 400, border: "1px solid #333" }}>
-            <h3 style={{ marginTop: 0 }}>Account Settings</h3>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Email Address</label>
-              <div style={{ color: "#ccc", fontSize: 14, marginTop: 4, padding: "10px", background: "#000", borderRadius: 6, border: "1px solid #222" }}>{profile.email || "No email linked"}</div>
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Profile Image URL</label>
-              <input type="text" value={profileImageUrl} onChange={(e) => setProfileImageUrl(e.target.value)} style={{ width: "100%", padding: 10, marginTop: 4, borderRadius: 6, border: "1px solid #333", background: "#000", color: "white" }} />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Bio</label>
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell us about yourself..." style={{ width: "100%", padding: 10, marginTop: 4, borderRadius: 6, border: "1px solid #333", background: "#000", color: "white", minHeight: 80 }} />
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={handleUpdateProfile} style={{ flex: 1, padding: 10, background: "#dd65fb", border: "none", color: "white", borderRadius: 6, cursor: "pointer", fontWeight: "bold" }}>Save Changes</button>
-              <button onClick={() => setShowSettings(false)} style={{ flex: 1, padding: 10, background: "#333", border: "none", color: "white", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
-            </div>
-            <hr style={{ margin: "20px 0", border: "none", borderTop: "1px solid #222" }} />
-            <button onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }} style={{ width: "100%", padding: 10, background: "none", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 6, cursor: "pointer" }}>Log Out</button>
-          </div>
-        </div>
-      )}
-
-      {/* 5. POST FEED */}
       {posts.map((post) => {
-        const isLiked = post.Post_Likes.some((l) => l.user_id === currentUser?.id);
-        const isDisliked = post.Post_Dislikes.some((d) => d.user_id === currentUser?.id);
+        const isLiked = post.Post_Likes?.some((l: any) => l.user_id === currentUser?.id);
+        const isDisliked = post.Post_Dislikes?.some((d: any) => d.user_id === currentUser?.id);
+        const isExpanded = expandedPosts[post.post_id];
+
         return (
           <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
-            <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} />
-            <p style={{ fontSize: 16, color: "#ddd", margin: "14px 0" }}>{post.text}</p>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={async () => { /* Like logic */ fetchPosts(profile.user_id); }} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", color: "white", padding: "6px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}>👍 {post.Post_Likes.length}</button>
-              <button onClick={async () => { /* Dislike logic */ fetchPosts(profile.user_id); }} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", color: "white", padding: "6px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}>👎 {post.Post_Dislikes.length}</button>
-              <button onClick={() => setExpandedPosts((prev) => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: "none", border: "1px solid #333", color: "#dd65fbff", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>
-                {expandedPosts[post.post_id] ? "Hide Replies" : post.Forum_Replies.length > 0 ? `See ${post.Forum_Replies.length} Replies` : "Reply"}
-              </button>
+            <AuthorHeader 
+              user={post.Users} userId={post.user_id} createdAt={post.created_at} 
+              showDelete={enrichedUser?.is_mod || currentUser?.id === post.user_id} 
+              onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} 
+            />
+            <p style={{ fontSize: '1rem', color: '#ddd', margin: "18px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
+            
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button onClick={() => handlePostAction(post.post_id, 'like')} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
+              <button onClick={() => handlePostAction(post.post_id, 'dislike')} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
+              <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#dd65fbff', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
             </div>
-            {expandedPosts[post.post_id] && (
-              <div style={{ marginTop: 16, borderTop: "1px solid #1a1a1a", paddingTop: 10 }}>
+
+            {isExpanded && (
+              <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
                 <RenderReplies allReplies={post.Forum_Replies} parentId={null} postId={post.post_id} />
-                <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-                  <input type="text" placeholder={replyingTo?.postId === post.post_id ? `Replying to ${replyingTo.username}...` : "Write a reply..."} value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #222", background: "#000", color: "white" }} />
-                  <button onClick={() => { /* Insert Reply logic */ }} style={{ padding: "8px 18px", borderRadius: 8, background: "#f16dd2ff", border: "none", color: "white", cursor: "pointer", fontWeight: "bold" }}>Reply</button>
+                <div style={{ marginTop: 15 }}>
+                  {replyingTo?.postId === post.post_id && (
+                    <div style={{ fontSize: 12, color: '#dd65fb', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Replying to @{replyingTo?.username}</span>
+                      <button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>Cancel</button>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input type="text" placeholder="Write a reply..." value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid #222", background: "#000", color: "white" }} />
+                    <button onClick={() => handleInsertReply(post.post_id)} style={{ background: "#dd65fb", color: "white", padding: "8px 18px", borderRadius: "8px", border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Reply</button>
+                  </div>
                 </div>
               </div>
             )}

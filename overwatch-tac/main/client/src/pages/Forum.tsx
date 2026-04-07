@@ -71,24 +71,23 @@ interface ForumPost {
   score?: number; 
 }
 
-interface ExtendedUser {
-  id: string;
-  is_mod?: boolean;
-  [key: string]: any;
-}
+const ADMIN_USERS = [
+  "06dceda7-8a9a-4ed5-8b65-f1a8fb85c528",
+  "38750a9c-ad2a-442f-a553-a3116f548c31",
+  "1ac8d6c6-0f6f-4171-b27f-ea08b941d6ae",
+  "236ffca1-63de-44f4-bcd4-1772ab2ee94f",
+  "48ce304b-ad93-4b60-a327-427939d7ff34"
+];
 
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
-export default function Forum({ currentUser }: { currentUser: ExtendedUser | any }) {
+export default function Forum({ currentUser }: { currentUser: any }) {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [newPostText, setNewPostText] = useState("");
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [loading, setLoading] = useState(true);
-  
-  // ADDED ENRICHED USER STATE
-  const [enrichedUser, setEnrichedUser] = useState<ExtendedUser | null>(null);
   
   const [activeTab, setActiveTab] = useState<'all' | 'following' | 'algorithmic'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
@@ -115,12 +114,12 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
       .from("Forum_Posts")
       .select(`
         post_id, user_id, text, created_at, is_deleted,
-        Users (username, profile_image_link, is_mod),
+        Users (username, profile_image_link),
         Post_Likes (user_id),
         Post_Dislikes (user_id), 
         Forum_Replies (
           reply_id, user_id, text, created_at, is_deleted, parent_reply_id,
-          Users (username, profile_image_link, is_mod),
+          Users (username, profile_image_link),
           Reply_Likes (user_id),
           Reply_Dislikes (user_id)
         )
@@ -162,28 +161,8 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
     setLoading(false);
   };
 
-  // UPDATED SYNC LOGIC
   useEffect(() => {
-    const syncUserAndFetch = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        const { data: profile } = await supabase
-          .from('Users')
-          .select('is_mod')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        setEnrichedUser({
-          ...user,
-          is_mod: profile?.is_mod || false
-        });
-      }
-      
-      await fetchPosts();
-    };
-
-    syncUserAndFetch();
+    fetchPosts();
   }, [activeTab, sortBy]);
 
   const getUserData = (userField: any) => {
@@ -204,6 +183,8 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
       </div>
     );
   }
+
+  const isMod = ADMIN_USERS.includes(currentUser.id);
 
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
@@ -260,14 +241,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
           </NavLink>
           <div>
             <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
-              {userData?.is_mod && (
-                <span style={{ 
-                  background: "linear-gradient(45deg, #e60082, #f65dfb)", 
-                  fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white',
-                  fontWeight: 'bold', textTransform: 'uppercase',
-                  position: "relative", top: "-2px"
-                }}>MOD</span>
-              )}
+              {ADMIN_USERS.includes(userId) && <span style={{ background: "#ef4444", fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white' }}>MOD</span>}
               <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>{userData?.username}</NavLink>
             </div>
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
@@ -286,10 +260,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser.id);
           const isReplyDisliked = reply.Reply_Dislikes?.some(d => d.user_id === currentUser.id);
-          
-          // UPDATED TO USE ENRICHED USER
-          const canDeleteReply = enrichedUser?.is_mod || enrichedUser?.id === reply.user_id;
-          
+          const canDeleteReply = (isMod || currentUser.id === reply.user_id);
           const replyUserData = getUserData(reply.Users);
           return (
             <div key={reply.reply_id} style={{ marginTop: 15 }}>
@@ -359,13 +330,9 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
           const isExpanded = expandedPosts[post.post_id];
           const isLiked = post.Post_Likes?.some(l => l.user_id === currentUser.id);
           const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
-          
-          // UPDATED TO USE ENRICHED USER
-          const isMod = enrichedUser?.is_mod || false;
-          
           return (
             <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
-              <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || enrichedUser?.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
+              <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || currentUser.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
               <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p></div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>

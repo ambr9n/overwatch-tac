@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useParams, NavLink } from "react-router-dom";
+import { useParams, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "../Supabase";
 
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
 /**
- * CUSTOM MODAL COMPONENT (100% Exact Copy from Forum.tsx)
+ * CUSTOM MODAL COMPONENT (Direct Copy from Forum.tsx)
  */
 const CustomModal: React.FC<{
   isOpen: boolean;
@@ -49,6 +49,7 @@ const CustomModal: React.FC<{
 
 export default function Profile() {
   const { uid } = useParams<{ uid: string }>();
+  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [enrichedUser, setEnrichedUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -57,7 +58,12 @@ export default function Profile() {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
 
-  // Exact Modal State from Forum.tsx
+  // --- SETTINGS STATE ---
+  const [showSettings, setShowSettings] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [newBio, setNewBio] = useState("");
+  const [newAvatar, setNewAvatar] = useState("");
+
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
     isOpen: false,
     type: 'post',
@@ -76,6 +82,11 @@ export default function Profile() {
       if (profileId) {
         const { data: pData } = await supabase.from("Users").select("*").eq("user_id", profileId).maybeSingle();
         setProfile(pData);
+        if (pData) {
+            setNewUsername(pData.username || "");
+            setNewBio(pData.bio || "");
+            setNewAvatar(pData.profile_image_link || "");
+        }
         fetchPosts(profileId);
       }
     };
@@ -87,6 +98,26 @@ export default function Profile() {
       .select(`post_id, user_id, text, created_at, is_deleted, Users (username, profile_image_link, is_mod), Post_Likes (user_id), Post_Dislikes (user_id), Forum_Replies (reply_id, user_id, text, created_at, is_deleted, parent_reply_id, Users (username, profile_image_link, is_mod), Reply_Likes (user_id), Reply_Dislikes (user_id))`)
       .eq("user_id", userId).order("created_at", { ascending: false });
     setPosts((data as any) || []);
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!currentUser) return;
+    const { error } = await supabase.from("Users").update({
+      username: newUsername,
+      bio: newBio,
+      profile_image_link: newAvatar
+    }).eq("user_id", currentUser.id);
+
+    if (!error) {
+      setShowSettings(false);
+      window.location.reload();
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+    window.location.reload();
   };
 
   const handlePostAction = async (postId: string, type: 'like' | 'dislike') => {
@@ -123,7 +154,6 @@ export default function Profile() {
     }
   };
 
-  // Exact Delete Function from Forum.tsx
   const confirmDelete = async () => {
     if (!deleteModal.id) return;
     if (deleteModal.type === 'post') {
@@ -146,7 +176,6 @@ export default function Profile() {
           </NavLink>
           <div>
             <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* Exact MOD tag from Forum.tsx */}
               {userData?.is_mod && (
                 <span style={{ 
                   background: "linear-gradient(45deg, #e60082, #f65dfb)", 
@@ -160,7 +189,6 @@ export default function Profile() {
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {/* Exact Delete Button from Forum.tsx */}
         {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>🗑️</button>}
       </div>
     );
@@ -183,7 +211,6 @@ export default function Profile() {
               />
               <p style={{ fontSize: 14, color: "#ccc", margin: "14px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
               
-              {/* Exact Reply Action Buttons from Forum.tsx */}
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <button onClick={() => handleReplyAction(reply.reply_id, 'like')} style={{ background: isLiked ? "#dd65fb33" : "#222", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
                 <button onClick={() => handleReplyAction(reply.reply_id, 'dislike')} style={{ background: isDisliked ? "#ef444433" : "#222", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
@@ -203,7 +230,7 @@ export default function Profile() {
   return (
     <div style={{ maxWidth: 850, margin: "80px auto", padding: 20, color: "white", fontFamily: 'sans-serif' }}>
       
-      {/* Exact Modal Setup from Forum.tsx */}
+      {/* DELETE MODAL */}
       <CustomModal 
         isOpen={deleteModal.isOpen} 
         title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} 
@@ -215,15 +242,58 @@ export default function Profile() {
         {deleteModal.type === 'post' ? "Are you sure? This will permanently delete this post and ALL replies." : "Are you sure? This will permanently delete this reply and all sub-replies."}
       </CustomModal>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 40 }}>
-        <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: "50%", border: "2px solid #333", objectFit: 'cover' }} />
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {profile.is_mod && <span style={{ background: "linear-gradient(45deg, #e60082, #f65dfb)", fontSize: 12, padding: "3px 8px", borderRadius: 4, color: 'white', fontWeight: 'bold', textTransform: 'uppercase' }}>MOD</span>}
-            <h2 style={{ margin: 0 }}>{profile.username}</h2>
-          </div>
-          <p style={{ color: "#aaa", marginTop: 8 }}>{profile.bio}</p>
+      {/* SETTINGS POPUP MODAL */}
+      <CustomModal
+        isOpen={showSettings}
+        title="Account Settings"
+        confirmText="Save Changes"
+        onConfirm={handleUpdateProfile}
+        onCancel={() => setShowSettings(false)}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 15, textAlign: 'left' }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 5 }}>Username</label>
+              <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} style={{ width: "94%", padding: 10, background: "#000", border: "1px solid #333", borderRadius: 6, color: "white" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 5 }}>Avatar URL</label>
+              <input type="text" value={newAvatar} onChange={(e) => setNewAvatar(e.target.value)} style={{ width: "94%", padding: 10, background: "#000", border: "1px solid #333", borderRadius: 6, color: "white" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 5 }}>Bio</label>
+              <textarea value={newBio} onChange={(e) => setNewBio(e.target.value)} style={{ width: "94%", padding: 10, background: "#000", border: "1px solid #333", borderRadius: 6, color: "white", minHeight: 80, resize: 'none' }} />
+            </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #282828', margin: '10px 0' }} />
+            <button 
+                onClick={handleLogout}
+                style={{ background: "#ff4d4d22", color: "#ff4d4d", border: "1px solid #ff4d4d", padding: "10px", borderRadius: 8, cursor: "pointer", fontWeight: "bold" }}
+            >
+                Log Out
+            </button>
         </div>
+      </CustomModal>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: "50%", border: "2px solid #333", objectFit: 'cover' }} />
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {profile.is_mod && <span style={{ background: "linear-gradient(45deg, #e60082, #f65dfb)", fontSize: 12, padding: "3px 8px", borderRadius: 4, color: 'white', fontWeight: 'bold', textTransform: 'uppercase' }}>MOD</span>}
+              <h2 style={{ margin: 0 }}>{profile.username}</h2>
+            </div>
+            <p style={{ color: "#aaa", marginTop: 8 }}>{profile.bio}</p>
+          </div>
+        </div>
+        
+        {/* GEAR ICON TOGGLE (Only for owner) */}
+        {currentUser?.id === profile.user_id && (
+          <button 
+            onClick={() => setShowSettings(true)}
+            style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: '20px' }}
+          >
+            ⚙️
+          </button>
+        )}
       </div>
 
       {posts.map((post) => {
@@ -240,7 +310,6 @@ export default function Profile() {
             />
             <p style={{ fontSize: '1rem', color: '#ddd', margin: "18px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p>
             
-            {/* Exact Post Action Buttons from Forum.tsx */}
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <button onClick={() => handlePostAction(post.post_id, 'like')} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
               <button onClick={() => handlePostAction(post.post_id, 'dislike')} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>

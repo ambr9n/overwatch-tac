@@ -384,7 +384,7 @@ export default function Profile() {
         const isLiked = post.Post_Likes.some((l) => l.user_id === currentUser?.id);
         const isDisliked = post.Post_Dislikes.some((d) => d.user_id === currentUser?.id);
         return (
-          <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
+          <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20, overflowWrap: "anywhere", wordBreak: "break-word" }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} />
             <p style={{ fontSize: 16, color: "#ddd", margin: "14px 0" }}>{post.text}</p>
             <div style={{ display: "flex", gap: 12 }}>

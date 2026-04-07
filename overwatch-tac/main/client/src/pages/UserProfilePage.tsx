@@ -69,7 +69,7 @@ const UserProfilePage = () => {
       ) : (
         <ul>
           {posts.map(post => (
-            <li key={post.post_id} style={{ marginBottom: "1rem", padding: "0.5rem", border: "1px solid #555", borderRadius: "5px" }}>
+            <li key={post.post_id} style={{ marginBottom: "1rem", padding: "0.5rem", border: "1px solid #555", borderRadius: "5px", overflowWrap: "anywhere", wordBreak: "break-word" }}>
               <p>{post.text}</p>
               <small>{new Date(post.created_at).toLocaleString()}</small>
             </li>

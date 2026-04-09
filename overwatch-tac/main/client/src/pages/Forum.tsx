@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../Supabase';
 import { NavLink } from 'react-router-dom';
 
@@ -46,36 +46,18 @@ const CustomModal: React.FC<{
 };
 
 interface ForumReply {
-  reply_id: string;
-  post_id: string;
-  user_id: string;
-  text: string;
-  created_at: string;
-  is_deleted: boolean;
-  parent_reply_id?: string;
-  Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
-  Reply_Likes: { user_id: string }[];
-  Reply_Dislikes: { user_id: string }[];
+  reply_id: string; post_id: string; user_id: string; text: string;
+  created_at: string; is_deleted: boolean; parent_reply_id?: string;
+  Users: any; Reply_Likes: { user_id: string }[]; Reply_Dislikes: { user_id: string }[];
 }
 
 interface ForumPost {
-  post_id: string;
-  user_id: string;
-  text: string;
-  created_at: string;
-  is_deleted: boolean;
-  Users: { username: string; profile_image_link: string; } | { username: string; profile_image_link: string; }[];
-  Post_Likes: { user_id: string }[];
-  Post_Dislikes: { user_id: string }[];
-  Forum_Replies: ForumReply[];
-  score?: number; 
+  post_id: string; user_id: string; text: string; created_at: string;
+  is_deleted: boolean; Users: any; Post_Likes: { user_id: string }[];
+  Post_Dislikes: { user_id: string }[]; Forum_Replies: ForumReply[]; score?: number; 
 }
 
-interface ExtendedUser {
-  id: string;
-  is_mod?: boolean;
-  [key: string]: any;
-}
+interface ExtendedUser { id: string; is_mod?: boolean; [key: string]: any; }
 
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
@@ -85,18 +67,24 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string, replyId: string, username: string } | null>(null);
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
+  
   const [loading, setLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   
-  // ADDED ENRICHED USER STATE
+  // Logic Refs
+  const observer = useRef<IntersectionObserver | null>(null);
+  const isFetchingRef = useRef(false);
+  const pageRef = useRef(0);
+
   const [enrichedUser, setEnrichedUser] = useState<ExtendedUser | null>(null);
-  
   const [activeTab, setActiveTab] = useState<'all' | 'following' | 'algorithmic'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'popular'>('newest');
+  
+  const PAGE_SIZE = 20;
 
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
-    isOpen: false,
-    type: 'post',
-    id: null
+    isOpen: false, type: 'post', id: null
   });
 
   const calculateAlgorithmicScore = (post: ForumPost) => {
@@ -110,7 +98,15 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
     return engagement / Math.pow((hoursSincePosted + 2), 1.5);
   };
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async (reset = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setIsFetchingMore(true);
+
+    if (reset) pageRef.current = 0;
+    const from = pageRef.current * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
     let query = supabase
       .from("Forum_Posts")
       .select(`
@@ -124,14 +120,12 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
           Reply_Likes (user_id),
           Reply_Dislikes (user_id)
         )
-      `);
-
-    if (activeTab === 'following' && currentUser) {
-      const { data: followingData } = await supabase
-        .from("User_Follows")
-        .select("following_id")
-        .eq("follower_id", currentUser.id);
+      `)
+      .order("created_at", { ascending: false })
+      .range(from, to);
       
+    if (activeTab === 'following' && currentUser) {
+      const { data: followingData } = await supabase.from("User_Follows").select("following_id").eq("follower_id", currentUser.id);
       const followingIds = followingData?.map(f => f.following_id) || [];
       query = query.in("user_id", followingIds);
     }
@@ -139,141 +133,115 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
     const { data, error } = await query;
 
     if (!error && data) {
-      let processedData = (data as unknown as ForumPost[]).map(post => ({
+      const processedData = (data as unknown as ForumPost[]).map(post => ({
         ...post,
         score: calculateAlgorithmicScore(post)
       }));
       
       if (activeTab === 'algorithmic') {
         processedData.sort((a, b) => (b.score || 0) - (a.score || 0));
-      } else {
-        if (sortBy === 'newest') {
-          processedData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        } else if (sortBy === 'popular') {
-          processedData.sort((a, b) => {
-            const scoreA = (a.Post_Likes?.length || 0) - (a.Post_Dislikes?.length || 0);
-            const scoreB = (b.Post_Likes?.length || 0) - (b.Post_Dislikes?.length || 0);
-            return scoreB - scoreA;
-          });
-        }
-      }
-      setPosts(processedData);
-    }
-    setLoading(false);
-  };
-
-  // UPDATED SYNC LOGIC
-  useEffect(() => {
-    const syncUserAndFetch = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        const { data: profile } = await supabase
-          .from('Users')
-          .select('is_mod')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        setEnrichedUser({
-          ...user,
-          is_mod: profile?.is_mod || false
+      } else if (sortBy === 'popular') {
+        processedData.sort((a, b) => {
+          const scoreA = (a.Post_Likes?.length || 0) - (a.Post_Dislikes?.length || 0);
+          const scoreB = (b.Post_Likes?.length || 0) - (b.Post_Dislikes?.length || 0);
+          return scoreB - scoreA;
         });
       }
-      
-      await fetchPosts();
-    };
 
-    syncUserAndFetch();
-  }, [activeTab, sortBy]);
-
-  const getUserData = (userField: any) => {
-    if (Array.isArray(userField)) return userField[0];
-    return userField;
-  };
-
-  if (loading) return null;
-
-  if (!currentUser) {
-    return (
-      <div style={{ maxWidth: 850, margin: "140px auto", padding: "40px", textAlign: "center", background: "#0a0a0a", borderRadius: "16px", border: "1px solid #1a1a1a", color: "white", fontFamily: 'sans-serif' }}>
-        <h2 style={{ fontSize: "2rem", marginBottom: "10px" }}>Join the Conversation</h2>
-        <p style={{ color: "#888", marginBottom: "30px" }}>You must be logged in to view posts, reply, or like content.</p>
-        <button onClick={() => window.location.href = '/login'} style={{ padding: "12px 30px", borderRadius: "8px", background: "#dd65fb", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", fontSize: "1rem" }}>
-          Log In to Continue
-        </button>
-      </div>
-    );
-  }
-
-  const confirmDelete = async () => {
-    if (!deleteModal.id) return;
-    if (deleteModal.type === 'post') {
-      const { error } = await supabase.from("Forum_Posts").delete().eq("post_id", deleteModal.id);
-      if (error) alert(`Delete failed: ${error.message}`);
-      else setPosts(prev => prev.filter(p => p.post_id !== deleteModal.id));
-    } else {
-      const { error } = await supabase.from("Forum_Replies").delete().eq("reply_id", deleteModal.id);
-      if (error) alert(`Delete failed: ${error.message}`);
-      else fetchPosts();
+      setPosts(prev => reset ? processedData : [...prev, ...processedData]);
+      setHasMore(data.length === PAGE_SIZE);
+      pageRef.current += 1;
     }
-    setDeleteModal({ isOpen: false, type: 'post', id: null });
-  };
+    
+    setLoading(false);
+    setIsFetchingMore(false);
+    isFetchingRef.current = false;
+  }, [activeTab, sortBy, currentUser]);
 
+  useEffect(() => { fetchPosts(true); }, [activeTab, sortBy]);
+
+  const lastElementRef = useCallback((node: HTMLDivElement) => {
+    if (isFetchingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        fetchPosts();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [isFetchingMore, hasMore, fetchPosts]);
+
+  useEffect(() => {
+    const syncUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from('Users').select('is_mod').eq('user_id', user.id).maybeSingle();
+        setEnrichedUser({ ...(user || {}), id: user.id, is_mod: profile?.is_mod || false });
+      }
+    };
+    syncUser();
+  }, []);
+
+  const getUserData = (userField: any) => Array.isArray(userField) ? userField[0] : userField;
+
+  // Interactions
   const handleLike = async (postId: string) => {
     const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     else await supabase.from("Post_Likes").insert([{ post_id: postId, user_id: currentUser.id }]);
-    fetchPosts();
+    fetchPosts(true); 
   };
 
   const handleDislike = async (postId: string) => {
     const { data: existing } = await supabase.from("Post_Dislikes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Dislikes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     else await supabase.from("Post_Dislikes").insert([{ post_id: postId, user_id: currentUser.id }]);
-    fetchPosts();
+    fetchPosts(true);
   };
 
   const handleReplyLike = async (replyId: string) => {
     const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Likes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
-    fetchPosts();
+    fetchPosts(true);
   };
 
   const handleReplyDislike = async (replyId: string) => {
     const { data: existing } = await supabase.from("Reply_Dislikes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Dislikes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Dislikes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
-    fetchPosts();
+    fetchPosts(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModal.id) return;
+    if (deleteModal.type === 'post') {
+      const { error } = await supabase.from("Forum_Posts").delete().eq("post_id", deleteModal.id);
+      if (!error) setPosts(prev => prev.filter(p => p.post_id !== deleteModal.id));
+    } else {
+      await supabase.from("Forum_Replies").delete().eq("reply_id", deleteModal.id);
+      fetchPosts(true);
+    }
+    setDeleteModal({ isOpen: false, type: 'post', id: null });
   };
 
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
-    const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-      e.currentTarget.src = DEFAULT_AVATAR;
-    };
     const userData = getUserData(user);
     return (
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <NavLink to={`/profile/${userId}`}>
-            <img src={userData?.profile_image_link || DEFAULT_AVATAR} onError={handleImageError} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover', backgroundColor: '#222' }} />
+            <img src={userData?.profile_image_link || DEFAULT_AVATAR} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: 'cover' }} />
           </NavLink>
           <div>
             <div style={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 8 }}>
-              {userData?.is_mod && (
-                <span style={{ 
-                  background: "linear-gradient(45deg, #e60082, #f65dfb)", 
-                  fontSize: 10, padding: "2px 6px", borderRadius: 4, color: 'white',
-                  fontWeight: 'bold', textTransform: 'uppercase',
-                  position: "relative", top: "-2px"
-                }}>MOD</span>
-              )}
+              {userData?.is_mod && <span style={{ background: "linear-gradient(45deg, #e60082, #f65dfb)", fontSize: 10, padding: "2px 6px", borderRadius: 4 }}>MOD</span>}
               <NavLink to={`/profile/${userId}`} style={{ color: 'white', textDecoration: 'none' }}>{userData?.username}</NavLink>
             </div>
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>🗑️</button>}
+        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑️</button>}
       </div>
     );
   };
@@ -286,19 +254,16 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         {children.map(reply => {
           const isReplyLiked = reply.Reply_Likes?.some(l => l.user_id === currentUser.id);
           const isReplyDisliked = reply.Reply_Dislikes?.some(d => d.user_id === currentUser.id);
-          
-          // UPDATED TO USE ENRICHED USER
           const canDeleteReply = enrichedUser?.is_mod || enrichedUser?.id === reply.user_id;
-          
           const replyUserData = getUserData(reply.Users);
           return (
             <div key={reply.reply_id} style={{ marginTop: 15 }}>
               <div style={{ background: '#111', padding: '16px', borderRadius: '12px', border: '1px solid #222' }}>
                 <AuthorHeader user={reply.Users} userId={reply.user_id} createdAt={reply.created_at} showDelete={canDeleteReply} onDelete={() => setDeleteModal({ isOpen: true, type: 'reply', id: reply.reply_id })} />
-                <div style={{ margin: '14px 0' }}><p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p></div>
+                <div style={{ margin: '14px 0' }}><p style={{ fontSize: 14, color: '#ccc', margin: 0, overflowWrap: 'anywhere' }}>{reply.text}</p></div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#dd65fb33" : "#222", border: isReplyLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
-                  <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
+                  <button onClick={() => handleReplyLike(reply.reply_id)} style={{ background: isReplyLiked ? "#dd65fb33" : "#222", border: isReplyLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer" }}>👍 {reply.Reply_Likes?.length || 0}</button>
+                  <button onClick={() => handleReplyDislike(reply.reply_id)} style={{ background: isReplyDisliked ? "#ef444433" : "#222", border: isReplyDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
                   <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: replyUserData?.username || "user" })} style={{ background: 'none', border: 'none', color: '#dd65fb', cursor: 'pointer', fontSize: 12 }}>Reply</button>
                 </div>
               </div>
@@ -310,88 +275,68 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
     );
   };
 
+  if (loading && pageRef.current === 0) return null;
+
   return (
-    <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", fontFamily: 'sans-serif', scrollbarGutter: 'stable', background: '#000', minHeight: '100vh' } as any}>
+    <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", background: '#000', minHeight: '100vh' }}>
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, borderBottom: '1px solid #1a1a1a' }}>
         <div style={{ display: 'flex', gap: 20 }}>
           {['all', 'following', 'algorithmic'].map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab as any)} style={{ 
-              background: 'none', border: 'none', color: activeTab === tab ? '#f29fffff' : '#e775bfff', 
+              background: 'none', border: 'none', color: activeTab === tab ? '#f29fffff' : '#888', 
               padding: '10px 5px', cursor: 'pointer', fontWeight: 'bold', 
               borderBottom: activeTab === tab ? '2px solid #e856c6ff' : '2px solid transparent'
-            }}>
-              {tab === 'algorithmic' ? 'Feed' : tab === 'all' ? 'All Posts' : 'Following'}
-            </button>
+            }}>{tab === 'algorithmic' ? 'Feed' : tab === 'all' ? 'All Posts' : 'Following'}</button>
           ))}
         </div>
-        
         {activeTab !== 'algorithmic' && (
-          <div style={{ display: 'flex', gap: 10, paddingBottom: 10 }}>
-            <select 
-              value={sortBy} 
-              onChange={(e) => setSortBy(e.target.value as any)}
-              style={{ background: '#111', color: '#ccc', border: '1px solid #333', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
-            >
-              <option value="newest">Newest First</option>
-              <option value="popular">Most Liked</option>
-            </select>
-          </div>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ background: '#111', color: '#ccc', border: '1px solid #333', padding: '5px 10px', borderRadius: '6px' }}>
+            <option value="newest">Newest First</option>
+            <option value="popular">Most Liked</option>
+          </select>
         )}
       </div>
 
       <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
-        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts();}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(221, 101, 251, 1)", color: "white", cursor: "pointer", border: 'none', fontWeight: 'bold' }}>Post</button>
+        <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts(true);}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#dd65fb", color: "white", cursor: "pointer", border: 'none' }}>Post</button>
       </div>
 
-      <CustomModal isOpen={deleteModal.isOpen} title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} confirmText="Delete Forever" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>
-        {deleteModal.type === 'post' ? "Are you sure? This will permanently delete this post and ALL replies." : "Are you sure? This will permanently delete this reply and all sub-replies."}
-      </CustomModal>
+      <CustomModal isOpen={deleteModal.isOpen} title="Delete?" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>Permanently delete this?</CustomModal>
 
-      {posts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#555' }}>
-          {activeTab === 'following' ? "You aren't following anyone yet, or they haven't posted." : "No posts found."}
-        </div>
-      ) : (
-        posts.map((post) => {
-          const isExpanded = expandedPosts[post.post_id];
-          const isLiked = post.Post_Likes?.some(l => l.user_id === currentUser.id);
-          const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
-          
-          // UPDATED TO USE ENRICHED USER
-          const isMod = enrichedUser?.is_mod || false;
-          
-          return (
-            <div key={post.post_id} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
-              <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={isMod || enrichedUser?.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
-              <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{post.text}</p></div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
-                <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
-                <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#dd65fbff', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide Replies' : (post.Forum_Replies?.length || 0) > 0 ? `See ${post.Forum_Replies.length} Replies` : 'Reply'}</button>
-              </div>
-              {isExpanded && (
-                <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
-                  <RenderReplies allReplies={post.Forum_Replies || []} parentId={null} postId={post.post_id} />
-                  <div style={{ marginTop: 15 }}>
-                    {replyingTo?.postId === post.post_id && <div style={{ fontSize: 12, color: '#dd65fb', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}><span>Replying to @{replyingTo.username}</span><button onClick={() => setReplyingTo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>Cancel</button></div>}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input type="text" placeholder="Write a reply..." value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid #222", background: "#000", color: "white" }} />
-                      <button onClick={() => {
-                        const payload: any = { post_id: post.post_id, user_id: currentUser.id, text: replyText[post.post_id] };
-                        if (replyingTo?.postId === post.post_id) payload.parent_reply_id = replyingTo.replyId;
-                        supabase.from("Forum_Replies").insert([payload]).then(() => { setReplyText({...replyText, [post.post_id]: ""}); setReplyingTo(null); fetchPosts(); });
-                      }} style={{ background: "#dd65fb", color: "white", padding: "8px 18px", borderRadius: "8px", border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Reply</button>
-                    </div>
-                  </div>
-                </div>
-              )}
+      {posts.map((post, index) => {
+        const isExpanded = expandedPosts[post.post_id];
+        const isLiked = post.Post_Likes?.some(l => l.user_id === currentUser.id);
+        const isDisliked = post.Post_Dislikes?.some(d => d.user_id === currentUser.id);
+        
+        return (
+          <div key={post.post_id} ref={index === posts.length - 1 ? lastElementRef : null} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
+            <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={enrichedUser?.is_mod || enrichedUser?.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
+            <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd' }}>{post.text}</p></div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
+              <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>
+              <button onClick={() => setExpandedPosts(prev => ({ ...prev, [post.post_id]: !prev[post.post_id] }))} style={{ background: 'none', border: '1px solid #333', color: '#dd65fbff', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>{isExpanded ? 'Hide' : (post.Forum_Replies?.length || 0) > 0 ? `Replies (${post.Forum_Replies.length})` : 'Reply'}</button>
             </div>
-          );
-        })
-      )}
+            {isExpanded && (
+              <div style={{ marginTop: 20, borderTop: '1px solid #1a1a1a', paddingTop: 10 }}>
+                <RenderReplies allReplies={post.Forum_Replies || []} parentId={null} postId={post.post_id} />
+                <div style={{ marginTop: 15, display: "flex", gap: 8 }}>
+                  <input type="text" placeholder="Write a reply..." value={replyText[post.post_id] || ""} onChange={(e) => setReplyText({ ...replyText, [post.post_id]: e.target.value })} style={{ flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid #222", background: "#000", color: "white" }} />
+                  <button onClick={() => {
+                    const payload: any = { post_id: post.post_id, user_id: currentUser.id, text: replyText[post.post_id] };
+                    if (replyingTo?.postId === post.post_id) payload.parent_reply_id = replyingTo.replyId;
+                    supabase.from("Forum_Replies").insert([payload]).then(() => { setReplyText({...replyText, [post.post_id]: ""}); setReplyingTo(null); fetchPosts(true); });
+                  }} style={{ background: "#dd65fb", color: "white", padding: "8px 18px", borderRadius: "8px", border: 'none', cursor: 'pointer' }}>Reply</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {isFetchingMore && <div style={{ textAlign: 'center', color: '#dd65fb' }}>Loading more...</div>}
     </div>
   );
 }

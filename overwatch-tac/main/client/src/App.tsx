@@ -13,6 +13,7 @@ import Auth from "./pages/SignUp";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import ProfileRedirect from "./pages/ProfileRedirect";
+import Teams from "./pages/Teams";
 import Forum from "./pages/Forum";
 import AboutUs from "./pages/AboutUs";
 import PrivacyPolicy from "./pages/PrivacyPolicy"; // Imported the new page
@@ -52,6 +53,7 @@ const App = () => {
               <Route path="/login" element={<Login />} />
               <Route path="/profile" element={<ProfileRedirect />} />
               <Route path="/profile/:uid" element={<Profile />} />
+              <Route path="/teams" element={<Teams />} />
               <Route path="/forum" element={<Forum currentUser={user} />} />
               <Route path="/about-us" element={<AboutUs />} />
               <Route path="/privacy" element={<PrivacyPolicy />} /> {/* New Route */}

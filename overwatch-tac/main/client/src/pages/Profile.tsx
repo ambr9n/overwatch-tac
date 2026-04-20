@@ -57,6 +57,7 @@ export default function Profile() {
   const [expandedPosts, setExpandedPosts] = useState<{ [key: string]: boolean }>({});
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
 
   // --- SETTINGS STATE ---
   const [showSettings, setShowSettings] = useState(false);
@@ -86,6 +87,16 @@ export default function Profile() {
             setNewUsername(pData.username || "");
             setNewBio(pData.bio || "");
             setNewAvatar(pData.profile_image_link || "");
+        }
+        if (user && user.id !== profileId) {
+            const { data: followData } = await supabase
+              .from("User_Follows")
+              .select("*")
+              .eq("follower_id", user.id)
+              .eq("following_id", profileId)
+              .maybeSingle();
+
+            setIsFollowing(!!followData);
         }
         fetchPosts(profileId);
       }
@@ -164,6 +175,32 @@ export default function Profile() {
       if (!error && profile) fetchPosts(profile.user_id);
     }
     setDeleteModal({ isOpen: false, type: 'post', id: null });
+  };
+
+  const handleFollowToggle = async () => {
+    if (!currentUser || !profile) return;
+      if (isFollowing) {
+        // Unfollow logic
+        const { error } = await supabase
+          .from("User_Follows")
+          .delete()
+          .eq("follower_id", currentUser.id)
+          .eq("following_id", profile.user_id);
+        
+        if (error) throw error;
+        setIsFollowing(false);
+      } else {
+        // Follow logic
+        const { error } = await supabase
+          .from("User_Follows")
+          .insert([{ 
+            follower_id: currentUser.id, 
+            following_id: profile.user_id 
+          }]);
+        
+        if (error) throw error;
+        setIsFollowing(true);
+      }
   };
 
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
@@ -284,6 +321,27 @@ export default function Profile() {
             <p style={{ color: "#aaa", marginTop: 8 }}>{profile.bio}</p>
           </div>
         </div>
+
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", marginTop: "12px" }}>
+          {currentUser && currentUser.id !== profile.user_id && (
+            <button 
+              onClick={handleFollowToggle}
+              style={{ 
+                background: isFollowing ? "transparent" : "linear-gradient(45deg, #e60082, #f65dfb)", 
+                color: "white", 
+                border: isFollowing ? "1px solid #444" : "none",
+                width: "110px",
+                height: "36px",
+                borderRadius: 8, 
+                cursor: "pointer", 
+                fontWeight: "bold",
+                fontSize: "0.8rem",
+                transition: "all 0.2s"
+              }}
+            >
+              {isFollowing ? "Unfollow" : "Follow"}
+            </button>
+          )}
         
         {/* GEAR ICON TOGGLE (Only for owner) */}
         {currentUser?.id === profile.user_id && (
@@ -295,6 +353,7 @@ export default function Profile() {
           </button>
         )}
       </div>
+    </div>
 
       {posts.map((post) => {
         const isLiked = post.Post_Likes?.some((l: any) => l.user_id === currentUser?.id);

@@ -1022,7 +1022,7 @@ const TacMap: React.FC = () => {
       {isMapSelectorOpen && (
         <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.9)", display: "flex", flexDirection: "column", zIndex: 2000, padding: "40px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", maxWidth: "1200px", width: "100%", margin: "0 auto 30px auto" }}>
-            <h2 style={{ fontSize: "32px", fontWeight: "800", background: "linear-gradient(45deg, #fff, #f65dfb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Select Battlefield</h2>
+            <h2 style={{ fontSize: "32px", fontWeight: "800", background: "linear-gradient(45deg, #fff, #f65dfb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Select a map</h2>
             <button onClick={() => setIsMapSelectorOpen(false)} style={{ background: "#333", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>Back to Map</button>
           </div>
 
@@ -1046,7 +1046,7 @@ const TacMap: React.FC = () => {
               </div>
             ) : (
               <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", color: "#444" }}>
-                <div style={{ fontSize: "60px", marginBottom: "20px" }}>🗺️</div>
+                <div style={{ fontSize: "60px", marginBottom: "20px" }}>✵</div>
                 <h3 style={{ fontSize: "24px" }}>Choose a Game Mode to see maps</h3>
               </div>
             )}

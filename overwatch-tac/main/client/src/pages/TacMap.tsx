@@ -1007,7 +1007,7 @@ const TacMap: React.FC = () => {
             <div style={{ marginTop: "20px", padding: "15px", background: "rgba(246, 93, 251, 0.05)", borderRadius: "8px", border: "1px dashed rgba(246, 93, 251, 0.3)" }}>
               <div style={{ fontSize: "11px", color: "#f65dfb", marginBottom: "5px", fontWeight: "bold" }}>PRO TIP</div>
               <div style={{ fontSize: "12px", color: "#aaa", lineHeight: "1.5" }}>
-                Use <b>Space + Drag</b> to pan the map, and <b>Mouse Wheel</b> to zoom in/out.
+                Use <b>You can use right click</b> to pan the map, and <b>Mouse Wheel</b> to zoom in/out.
               </div>
             </div>
           )}

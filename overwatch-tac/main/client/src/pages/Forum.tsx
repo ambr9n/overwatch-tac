@@ -117,8 +117,9 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
           Reply_Dislikes (user_id)
         )
       `)
-      .order("created_at", { ascending: false });
-
+      .order("created_at", { ascending: false })
+      .range(from, to);
+      
     if (activeTab === 'following' && currentUser) {
       const { data: followingData } = await supabase.from("User_Follows").select("following_id").eq("follower_id", currentUser.id);
       const followingIds = followingData?.map(f => f.following_id) || [];
@@ -128,7 +129,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
     const { data, error } = await query;
 
     if (!error && data) {
-      let processedData = (data as unknown as ForumPost[]).map(post => ({
+      const processedData = (data as unknown as ForumPost[]).map(post => ({
         ...post,
         score: calculateAlgorithmicScore(post)
       }));
@@ -137,16 +138,14 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         processedData.sort((a, b) => (b.score || 0) - (a.score || 0));
       } else if (sortBy === 'popular') {
         processedData.sort((a, b) => {
-          const likesA = a.Post_Likes?.length || 0;
-          const likesB = b.Post_Likes?.length || 0;
-          if (likesB !== likesA) return likesB - likesA;
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          const scoreA = (a.Post_Likes?.length || 0) - (a.Post_Dislikes?.length || 0);
+          const scoreB = (b.Post_Likes?.length || 0) - (b.Post_Dislikes?.length || 0);
+          return scoreB - scoreA;
         });
       }
 
-      const paginatedData = processedData.slice(from, to + 1);
-      setPosts(prev => reset ? paginatedData : [...prev, ...paginatedData]);
-      setHasMore(paginatedData.length === PAGE_SIZE);
+      setPosts(prev => reset ? processedData : [...prev, ...processedData]);
+      setHasMore(data.length === PAGE_SIZE);
       pageRef.current += 1;
     }
     

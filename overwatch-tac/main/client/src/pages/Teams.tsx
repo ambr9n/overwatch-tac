@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "../Supabase";
 import { useNavigate } from "react-router-dom";
 
@@ -25,6 +25,15 @@ export default function Teams() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"my_teams" | "discover">("my_teams");
   const [teams, setTeams] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [socialIds, setSocialIds] = useState<string[]>([]);
+  const PAGE_SIZE = 10;
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const isFetchingRef = useRef(false);
+  const pageRef = useRef(0);
+
   const [selectedTeam, setSelectedTeam] = useState<any>(null);
   const [teamSaves, setTeamSaves] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -45,7 +54,7 @@ export default function Teams() {
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
   const [teamIcon, setTeamIcon] = useState("");
-
+  
   const [userSaves, setUserSaves] = useState<any[]>([]);
   const [isSharingSave, setIsSharingSave] = useState(false);
   const [selectedSaveToShare, setSelectedSaveToShare] = useState<string>("");
@@ -56,33 +65,116 @@ export default function Teams() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-      fetchTeams(user?.id);
+      if (user) {
+        const [following, followers] = await Promise.all([
+          supabase.from("Follows").select("following_id").eq("follower_id", user.id),
+          supabase.from("Follows").select("follower_id").eq("following_id", user.id)
+        ]);
+        const combined = new Set([
+          ...(following.data?.map(f => f.following_id) || []),
+          ...(followers.data?.map(f => f.follower_id) || [])
+        ]);
+        setSocialIds(Array.from(combined));
+      }
     };
     init();
   }, []);
 
-  const fetchTeams = async (userId?: string) => {
-    const idToUse = userId || currentUser?.id;
-    const { data: teamsData } = await supabase
-      .from("Teams")
-      .select(`
-        team_id, name, description, profile_image_link, owner_id, 
-        Users!Teams_owner_id_fkey(username), 
-        User_Teams(user_id)
-      `);
+  const fetchTeams = useCallback(async (reset = false) => {
+    if (isFetchingRef.current || !currentUser) return;
+    isFetchingRef.current = true;
+    setLoading(true);
 
-    if (teamsData) {
-      setTeams(teamsData.map(t => {
-        const isOwner = t.owner_id === idToUse;
-        const isMemberOfBridge = t.User_Teams?.some((ut: any) => ut.user_id === idToUse);
-        return {
+    if (reset) {
+        pageRef.current = 0;
+        setHasMore(true);
+    }
+    
+    const from = pageRef.current * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    if (activeTab === "my_teams") {
+      const { data: membershipData } = await supabase
+        .from("User_Teams")
+        .select("team_id")
+        .eq("user_id", currentUser.id);
+
+      const teamIds = membershipData?.map(m => m.team_id) || [];
+
+      const { data, error } = await supabase
+        .from("Teams")
+        .select(`
+          team_id, name, description, profile_image_link, owner_id, 
+          Users!Teams_owner_id_fkey(username), 
+          User_Teams(user_id)
+        `)
+        .in("team_id", teamIds);
+
+      if (!error && data) {
+        const processed = data.map(t => ({
           ...t,
           member_count: t.User_Teams?.length || 0,
-          is_member: isOwner || isMemberOfBridge 
-        };
-      }));
+          is_member: true 
+        }));
+        setTeams(processed);
+        setHasMore(false);
+      }
+    } else {
+      let query = supabase
+        .from("Teams")
+        .select(`
+          team_id, name, description, profile_image_link, owner_id, 
+          Users!Teams_owner_id_fkey(username), 
+          User_Teams(user_id)
+        `)
+        .range(from, to)
+        .order('name', { ascending: true });
+
+      if (searchQuery.trim()) {
+        query = query.ilike('name', `%${searchQuery.trim()}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        const processed = data.map(t => {
+          const members = t.User_Teams?.map((ut: any) => ut.user_id) || [];
+          const isFriendInside = members.some((mId: string) => socialIds.includes(mId));
+          const isMember = t.owner_id === currentUser.id || members.includes(currentUser.id);
+          return {
+            ...t,
+            member_count: members.length,
+            has_social: isFriendInside,
+            is_member: isMember
+          };
+        });
+
+        const discoverOnly = processed.filter(t => !t.is_member);
+        setTeams(prev => reset ? discoverOnly : [...prev, ...discoverOnly]);
+        setHasMore(data.length === PAGE_SIZE);
+        pageRef.current += 1;
+      }
     }
-  };
+    setLoading(false);
+    isFetchingRef.current = false;
+  }, [activeTab, currentUser, socialIds, searchQuery]);
+
+  const lastElementRef = useCallback((node: HTMLDivElement) => {
+    if (activeTab !== "discover" || loading || !hasMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        fetchTeams();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore, fetchTeams, activeTab]);
+
+  useEffect(() => {
+    if (currentUser && !selectedTeam) {
+      fetchTeams(true);
+    }
+  }, [activeTab, currentUser, selectedTeam, searchQuery, fetchTeams]);
 
   const fetchUserSaves = async () => {
     if (!currentUser) return;
@@ -131,25 +223,11 @@ export default function Teams() {
 
   const handleShareSave = async () => {
     if (!selectedSaveToShare || !selectedTeam || !currentUser) return;
-
-    const { data: existing } = await supabase
-      .from("Team_Saves")
-      .select("save_id")
-      .eq("team_id", selectedTeam.team_id)
-      .eq("save_id", selectedSaveToShare)
-      .maybeSingle();
-
-    if (existing) {
-      setIsSuccess({ show: true, msg: "This save is already shared!" });
-      return;
-    }
-
     const { error } = await supabase.from("Team_Saves").insert([{
       team_id: selectedTeam.team_id,
       save_id: selectedSaveToShare,
       owner_id: currentUser.id
     }]);
-
     if (!error) {
       setIsSharingSave(false);
       setSelectedSaveToShare("");
@@ -160,13 +238,7 @@ export default function Teams() {
 
   const handleDeleteSharedSave = async () => {
     if (!isDeletingSave.saveId || !selectedTeam) return;
-
-    const { error } = await supabase
-      .from("Team_Saves")
-      .delete()
-      .eq("save_id", isDeletingSave.saveId)
-      .eq("team_id", selectedTeam.team_id);
-    
+    const { error } = await supabase.from("Team_Saves").delete().eq("save_id", isDeletingSave.saveId).eq("team_id", selectedTeam.team_id);
     if (!error) {
       setIsDeletingSave({ show: false, saveId: null });
       fetchTeamData(selectedTeam);
@@ -175,15 +247,10 @@ export default function Teams() {
 
   const handleJoinTeam = async () => {
     if (!currentUser || !selectedTeam) return;
-
-    const { error } = await supabase.from("User_Teams").insert([{ 
-        team_id: selectedTeam.team_id, 
-        user_id: currentUser.id 
-    }]);
-
+    const { error } = await supabase.from("User_Teams").insert([{ team_id: selectedTeam.team_id, user_id: currentUser.id }]);
     if (!error) {
         setIsSuccess({ show: true, msg: `Joined ${selectedTeam.name}!` });
-        await fetchTeams(); 
+        await fetchTeams(true); 
         await fetchTeamData({ ...selectedTeam, is_member: true }); 
     }
   };
@@ -194,7 +261,7 @@ export default function Teams() {
     await supabase.from("User_Teams").delete().eq("team_id", selectedTeam.team_id).eq("user_id", currentUser.id);
     setIsLeaving(false);
     setSelectedTeam(null);
-    fetchTeams();
+    fetchTeams(true);
   };
 
   const checkNameAvailability = async (name: string, excludeId?: string) => {
@@ -206,20 +273,13 @@ export default function Teams() {
 
   const handleUpdateTeam = async () => {
     if (!selectedTeam?.team_id) return;
-
     const isTaken = await checkNameAvailability(teamName, selectedTeam.team_id);
-    if (isTaken) {
-      setNameConflict({ show: true, name: teamName.trim() });
-      return;
-    }
+    if (isTaken) { setNameConflict({ show: true, name: teamName.trim() }); return; }
     const finalIcon = teamIcon.trim() === "" ? null : teamIcon.trim();
-    const { error } = await supabase.from("Teams")
-      .update({ name: teamName, description: teamDesc, profile_image_link: finalIcon })
-      .eq("team_id", selectedTeam.team_id);
-    
+    const { error } = await supabase.from("Teams").update({ name: teamName, description: teamDesc, profile_image_link: finalIcon }).eq("team_id", selectedTeam.team_id);
     if (!error) {
       setIsSettingsOpen(false);
-      fetchTeams();
+      fetchTeams(true);
       setSelectedTeam({...selectedTeam, name: teamName, description: teamDesc, profile_image_link: finalIcon});
       setIsSuccess({ show: true, msg: "Team updated successfully!" });
     }
@@ -227,24 +287,14 @@ export default function Teams() {
 
   const handleCreateTeam = async () => {
     if (!teamName.trim() || !currentUser) return;
-
     const isTaken = await checkNameAvailability(teamName);
-    if (isTaken) {
-      setNameConflict({ show: true, name: teamName.trim() });
-      return;
-    }
+    if (isTaken) { setNameConflict({ show: true, name: teamName.trim() }); return; }
     const finalIcon = teamIcon.trim() === "" ? null : teamIcon.trim();
-    const { data: newTeam } = await supabase.from("Teams").insert([{ 
-      name: teamName.trim(), 
-      description: teamDesc, 
-      profile_image_link: finalIcon, 
-      owner_id: currentUser.id 
-    }]).select().single();
-
+    const { data: newTeam } = await supabase.from("Teams").insert([{ name: teamName.trim(), description: teamDesc, profile_image_link: finalIcon, owner_id: currentUser.id }]).select().single();
     if (newTeam) {
       await supabase.from("User_Teams").insert([{ team_id: newTeam.team_id, user_id: currentUser.id }]);
       setIsCreating(false);
-      fetchTeams();
+      fetchTeams(true);
       setIsSuccess({ show: true, msg: `Team "${teamName.trim()}" created!` });
     }
   };
@@ -252,17 +302,8 @@ export default function Teams() {
   const handleDeleteTeam = async () => {
     if (!selectedTeam?.team_id) return;
     const { error } = await supabase.from("Teams").delete().eq("team_id", selectedTeam.team_id);
-    if (!error) {
-      setIsDeletingTeam(false);
-      setIsSettingsOpen(false);
-      setSelectedTeam(null);
-      setIsSuccess({ show: true, msg: "Team deleted successfully." });
-      fetchTeams();
-    }
+    if (!error) { setIsDeletingTeam(false); setIsSettingsOpen(false); setSelectedTeam(null); setIsSuccess({ show: true, msg: "Team deleted." }); fetchTeams(true); }
   };
-
-  const myTeams = teams.filter(t => t.is_member);
-  const discoverTeams = teams.filter(t => !t.is_member && t.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const inputStyle = { width: '100%', background: '#0a0a0a', border: '1px solid #333', color: 'white', padding: 12, borderRadius: 6, marginBottom: 15 };
   const labelStyle = { display: 'block', color: '#666', fontSize: 12, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' as const };
@@ -283,13 +324,7 @@ export default function Teams() {
             ) : (
               <div style={{ width: '100%', textAlign: 'center', padding: '40px 0' }}>
                 <h1 style={{ margin: '0 0 10px 0', fontSize: '2.5rem', fontWeight: 900 }}>Teams</h1>
-                <p style={{ color: '#666', marginBottom: 25 }}>Log in to make and join teams with others</p>
-                <button 
-                  onClick={() => navigate('/login')} 
-                  style={{ background: "#f65dfb", color: "white", border: "none", padding: "12px 30px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}
-                >
-                  Login to Continue
-                </button>
+                <button onClick={() => navigate('/login')} style={{ background: "#f65dfb", color: "white", border: "none", padding: "12px 30px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>Login to Continue</button>
               </div>
             )}
           </div>
@@ -299,18 +334,28 @@ export default function Teams() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-            {(activeTab === "my_teams" ? myTeams : discoverTeams).map(team => (
-              <div key={team.team_id} onClick={() => fetchTeamData(team)} onMouseEnter={() => setHoveredTeamId(team.team_id)} onMouseLeave={() => setHoveredTeamId(null)} style={{ background: "#0a0a0a", border: hoveredTeamId === team.team_id ? "1px solid #f65dfb" : "1px solid #1a1a1a", padding: "20px 25px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 20, cursor: 'pointer' }}>
-                {team.profile_image_link && (
-                    <img src={team.profile_image_link} style={{ width: 60, height: 60, borderRadius: 10, objectFit: 'cover' }} alt="Team Icon" />
-                )}
+            {teams.map((team, index) => (
+              <div 
+                key={team.team_id} 
+                ref={index === teams.length - 1 ? lastElementRef : null}
+                onClick={() => fetchTeamData(team)} 
+                onMouseEnter={() => setHoveredTeamId(team.team_id)} 
+                onMouseLeave={() => setHoveredTeamId(null)} 
+                style={{ background: "#0a0a0a", border: hoveredTeamId === team.team_id ? "1px solid #f65dfb" : "1px solid #1a1a1a", padding: "20px 25px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 20, cursor: 'pointer' }}
+              >
+                {team.profile_image_link && <img src={team.profile_image_link} style={{ width: 60, height: 60, borderRadius: 10, objectFit: 'cover' }} alt="Team Icon" />}
                 <div style={{ flex: 1 }}>
                   <h3 style={{ margin: 0, color: '#f65dfb' }}>{team.name}</h3>
+                  {team.has_social && activeTab === 'discover' && (
+                    <span style={{ fontSize: 9, background: '#f65dfb22', color: '#f65dfb', padding: '2px 6px', borderRadius: 4, fontWeight: 800, verticalAlign: 'middle', marginLeft: 8 }}>SOCIAL MATCH</span>
+                  )}
                   <p style={{ color: '#666', fontSize: 13, margin: '4px 0' }}>{team.description || "No description."}</p>
                 </div>
                 <div style={{ fontSize: 10, color: '#444', fontWeight: 800 }}>{team.member_count} MEMBERS</div>
               </div>
             ))}
+            {loading && <p style={{ textAlign: 'center', color: '#666' }}>Loading...</p>}
+            {!loading && teams.length === 0 && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>No teams found.</p>}
           </div>
         </div>
       ) : (
@@ -331,7 +376,6 @@ export default function Teams() {
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => setIsViewingMembers(true)} style={{ background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '10px 18px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Members</button>
-                  
                   {!selectedTeam.is_member ? (
                      <button onClick={handleJoinTeam} style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Join Team</button>
                   ) : (
@@ -345,90 +389,25 @@ export default function Teams() {
               </div>
             </div>
           </div>
-
           {selectedTeam.is_member && (
-            <div style={{ maxWidth: 1200, margin: "50px auto", padding: "0 40px" }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
-                <h2 style={{ fontSize: '1.8rem', fontWeight: 900, textTransform: "uppercase", letterSpacing: "1px" }}>Team Strategies</h2>
-                <button 
-                  onClick={() => { fetchUserSaves(); setIsSharingSave(true); }}
-                  style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}
-                >
-                  + Share Strategy
-                </button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: "25px" }}>
-                {teamSaves.map((save) => {
-                  const isHovered = hoveredSaveId === save.id;
-                  return (
-                    <div 
-                      key={save.id} 
-                      onMouseEnter={() => setHoveredSaveId(save.id)}
-                      onMouseLeave={() => setHoveredSaveId(null)}
-                      style={{ 
-                        background: '#111', 
-                        border: isHovered ? '1px solid #f65dfb' : '1px solid #222', 
-                        borderRadius: 12, 
-                        overflow: 'hidden',
-                        transition: 'all 0.2s ease-in-out',
-                        transform: isHovered ? 'translateY(-5px)' : 'none',
-                        boxShadow: isHovered ? '0 10px 20px rgba(0,0,0,0.4)' : 'none'
-                      }}
-                    >
-                      <div style={{ padding: "20px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "15px" }}>
-                          <div>
-                            <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#f65dfb" }}>{save.map_name}</h3>
-                            <p style={{ margin: "5px 0 0 0", fontSize: "11px", fontWeight: "700", color: "#666", textTransform: "uppercase" }}>{save.base_map}</p>
-                          </div>
-                          {(currentUser?.id === selectedTeam.owner_id || currentUser?.username === save.owner_id) && (
-                            <button 
-                              onClick={() => setIsDeletingSave({ show: true, saveId: save.id })}
-                              style={{ background: "transparent", border: "none", color: "#ff0000", cursor: "pointer", fontSize: "18px", padding: 0 }}
-                            >
-                              x
-                            </button>
-                          )}
-                        </div>
-                        
-                        <p style={{ color: "#aaa", fontSize: "13px", lineHeight: "1.4", margin: "0 0 20px 0", minHeight: "40px" }}>
-                           Shared by <span style={{ color: "#f65dfb", fontWeight: "600" }}>{save.creator}</span>
-                        </p>
-
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <button 
-                            onClick={() => navigate(`/tacmap?load=${save.id}`)}
-                            style={{ 
-                              width: "100%", 
-                              background: isHovered ? "#f65dfb" : "transparent", 
-                              color: isHovered ? "white" : "#f65dfb",
-                              border: "1px solid #f65dfb",
-                              padding: "10px", 
-                              borderRadius: "6px", 
-                              fontWeight: "800", 
-                              fontSize: "12px",
-                              cursor: "pointer",
-                              transition: "0.2s",
-                              textTransform: "uppercase"
-                            }}
-                          >
-                            View Strategy
-                          </button>
-                        </div>
-                      </div>
+             <div style={{ maxWidth: 1200, margin: "50px auto", padding: "0 40px" }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
+               <h2 style={{ fontSize: '1.8rem', fontWeight: 900, textTransform: "uppercase", letterSpacing: "1px" }}>Team Strategies</h2>
+               <button onClick={() => { fetchUserSaves(); setIsSharingSave(true); }} style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}>+ Share Strategy</button>
+             </div>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: "25px" }}>
+               {teamSaves.map((save) => (
+                 <div key={save.id} style={{ background: '#111', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <h3 style={{ margin: 0, color: "#f65dfb" }}>{save.map_name}</h3>
+                      <button onClick={() => setIsDeletingSave({ show: true, saveId: save.id })} style={{ background: "none", border: "none", color: "red", cursor: "pointer" }}>x</button>
                     </div>
-                  );
-                })}
-              </div>
-              
-              {teamSaves.length === 0 && (
-                <div style={{ textAlign: "center", padding: "100px 0", color: "#444" }}>
-                  <p style={{ fontSize: "1.2rem", fontWeight: "700" }}>No strategies shared yet.</p>
-                  <p>Be the first to share a plan with the team!</p>
-                </div>
-              )}
-            </div>
+                    <p style={{ fontSize: 12, color: "#666" }}>{save.base_map}</p>
+                    <button onClick={() => navigate(`/tacmap?load=${save.id}`)} style={{ width: "100%", marginTop: 15, background: "none", border: "1px solid #f65dfb", color: "#f65dfb", padding: 8, borderRadius: 6, cursor: "pointer" }}>View</button>
+                 </div>
+               ))}
+             </div>
+           </div>
           )}
         </div>
       )}
@@ -436,23 +415,16 @@ export default function Teams() {
       {isSharingSave && (
         <ModalShell title="Share Strategy" onClose={() => setIsSharingSave(false)} onConfirm={handleShareSave} confirmText="Share with Team" globalFont={globalFont}>
           <label style={labelStyle}>Select from your saves</label>
-          <select 
-            value={selectedSaveToShare} 
-            onChange={(e) => setSelectedSaveToShare(e.target.value)}
-            style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }}
-          >
-            <option value="">-- Choose a Strategy --</option>
-            {userSaves.map(s => (
-              <option key={s.save_id} value={s.save_id}>{s.name}</option>
-            ))}
+          <select value={selectedSaveToShare} onChange={(e) => setSelectedSaveToShare(e.target.value)} style={{ ...inputStyle }}>
+            <option value="">-- Select Save --</option>
+            {userSaves.map(s => <option key={s.save_id} value={s.save_id}>{s.name}</option>)}
           </select>
-          <p style={{ color: '#666', fontSize: 12, marginTop: 10 }}>Select a personal save to make it visible to all team members.</p>
         </ModalShell>
       )}
 
       {isDeletingSave.show && (
         <ModalShell title="Unshare Strategy?" onClose={() => setIsDeletingSave({ show: false, saveId: null })} onConfirm={handleDeleteSharedSave} confirmText="Remove from Team" isDelete={true} globalFont={globalFont}>
-          <p style={{ color: '#888', textAlign: 'center' }}>Are you sure you want to unshare this strategy? It will no longer be visible to team members.</p>
+          <p style={{ color: '#888', textAlign: 'center' }}>Are you sure you want to unshare this strategy?</p>
         </ModalShell>
       )}
 
@@ -464,7 +436,7 @@ export default function Teams() {
 
       {isLeaving && (
         <ModalShell title="Leave Team?" onClose={() => setIsLeaving(false)} onConfirm={confirmLeaveTeam} confirmText="Leave" isDelete={true} globalFont={globalFont}>
-            <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>Are you sure you want to leave <b>{selectedTeam.name}</b>? All strategies you've shared with this team will be removed.</p>
+            <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>Are you sure you want to leave <b>{selectedTeam.name}</b>?</p>
         </ModalShell>
       )}
 
@@ -485,17 +457,15 @@ export default function Teams() {
         <ModalShell title="Team Settings" onClose={() => setIsSettingsOpen(false)} onConfirm={handleUpdateTeam} confirmText="Save Changes" globalFont={globalFont}>
           <label style={labelStyle}>Team Name</label>
           <input type="text" value={teamName} onChange={e => setTeamName(e.target.value)} placeholder="Team Name" style={inputStyle} />
-          <label style={labelStyle}>Team Description (optional)</label>
-          <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} placeholder="Description" style={{ ...inputStyle, height: 80, resize: 'none' }} />
-          <label style={labelStyle}>Team Profile Picture (optional)</label>
-          <input type="text" value={teamIcon} onChange={e => setTeamIcon(e.target.value)} placeholder="Profile Picture URL" style={{ ...inputStyle, marginBottom: 0 }} />
+          <label style={labelStyle}>Team Description</label>
+          <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} style={{ ...inputStyle, height: 80, resize: 'none' }} />
           <button onClick={() => setIsDeletingTeam(true)} style={{ width: '100%', background: '#331111', color: '#ff4d4d', border: '1px solid #552222', padding: 12, borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', marginTop: 25 }}>Delete Team</button>
         </ModalShell>
       )}
 
       {isDeletingTeam && (
         <ModalShell title="Delete Team?" onClose={() => setIsDeletingTeam(false)} onConfirm={handleDeleteTeam} confirmText="Delete Forever" isDelete={true} globalFont={globalFont}>
-            <p style={{ color: '#888', textAlign: 'center' }}>This action is permanent. Are you sure you want to delete <b>{selectedTeam.name}</b>?</p>
+            <p style={{ color: '#888', textAlign: 'center' }}>Are you sure you want to delete <b>{selectedTeam.name}</b>?</p>
         </ModalShell>
       )}
 
@@ -503,16 +473,16 @@ export default function Teams() {
         <ModalShell title="New Team" onClose={() => setIsCreating(false)} onConfirm={handleCreateTeam} confirmText="Create Team" globalFont={globalFont}>
           <label style={labelStyle}>Team Name</label>
           <input type="text" value={teamName} onChange={e => setTeamName(e.target.value)} placeholder="Team Name" style={inputStyle} />
-          <label style={labelStyle}>Description</label>
+          <label style={labelStyle}>Team Description</label>
           <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} placeholder="Description" style={{ ...inputStyle, height: 80, resize: 'none' }} />
-          <label style={labelStyle}>Icon URL</label>
-          <input type="text" value={teamIcon} onChange={e => setTeamIcon(e.target.value)} placeholder="Icon URL" style={{ ...inputStyle, marginBottom: 0 }} />
+          <label style={labelStyle}>Team Icon (URL)</label>
+          <input type="text" value={teamIcon} onChange={e => setTeamIcon(e.target.value)} placeholder="Icon URL" style={inputStyle} />
         </ModalShell>
       )}
 
       {nameConflict.show && (
         <ModalShell title="Name Taken" onClose={() => setNameConflict({ show: false, name: "" })} showButtons={false} globalFont={globalFont} isDelete={true}>
-          <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.6' }}>The team name "<b>{nameConflict.name}</b>" is already in use. Please choose a unique name for your team.</p>
+          <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.6' }}>The team name "<b>{nameConflict.name}</b>" is already in use.</p>
         </ModalShell>
       )}
     </div>

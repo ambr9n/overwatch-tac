@@ -36,7 +36,7 @@ const Startup = ({ onFinish }: Props) => {
     <div className={`startup ${fadeOut ? "fade-out" : ""}`}>
       <h1 className="startup-logo">
         <p style={{ textAlign: 'center' }}>
-          Overtac<br />
+          OWTac<br />
           <span></span>
         </p>
       </h1>

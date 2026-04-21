@@ -66,6 +66,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
   isOpen, title, children, onConfirm, onCancel, confirmText = "OK", showCancel = true 
 }) => {
   if (!isOpen) return null;
+
   return (
     <div style={{
       position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
@@ -110,6 +111,7 @@ interface ToolButtonProps {
 
 const ToolButton: React.FC<ToolButtonProps> = ({ name, icon, activeTool, onClick, disabled, title }) => {
   const isActive = activeTool === name;
+
   return (
     <button
       onClick={() => onClick(name)}
@@ -185,6 +187,7 @@ const TacMap: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const loadId = searchParams.get("load");
   const navigate = useNavigate();
+
   const [mapList, setMapList] = useState<MapData[]>([]);
   const [heroAssets, setHeroAssets] = useState<HeroAsset[]>([]);
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -213,7 +216,6 @@ const TacMap: React.FC = () => {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
-
   const [history, setHistory] = useState<HistoryState[]>([{ markers: [], drawings: [] }]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
@@ -227,9 +229,7 @@ const TacMap: React.FC = () => {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
   
-
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-
   const [hoveredMap, setHoveredMap] = useState<MapData | null>(null);
   const [isMapButtonHovered, setIsMapButtonHovered] = useState(false);
 
@@ -375,6 +375,7 @@ const TacMap: React.FC = () => {
   const drawCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -511,6 +512,7 @@ const TacMap: React.FC = () => {
     if (!newStrategyName && !activeSaveId) return;
     setIsNameModalOpen(false);
     setIsSaving(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -527,6 +529,7 @@ const TacMap: React.FC = () => {
           name: newStrategyName,
           description: description 
         }]).select().single();
+
         if (headerError) throw headerError;
         currentId = header.save_id;
         setActiveSaveId(currentId);
@@ -551,6 +554,7 @@ const TacMap: React.FC = () => {
         color: activeTeam === "ally" ? "#007bff" : "#dc3545",
         width: brushSize
       }, { onConflict: 'save_id' });
+
       setIsConfirmModalOpen(true);
     } catch (err) { 
         console.error("Save failed:", err);
@@ -584,7 +588,7 @@ const TacMap: React.FC = () => {
     if (!assetData) return;
     const asset = JSON.parse(assetData);
     const coords = getCoords(e);
-    
+
     // VALIDATION: Prevent more than 5 per team and prevent duplicate heroes per team
     const teamMarkers = activeTeam === "ally" ? allyMarkers : enemyMarkers;
     if (teamMarkers.length >= 5) return;
@@ -594,6 +598,7 @@ const TacMap: React.FC = () => {
       id: Date.now(), x: coords.x, y: coords.y,
       team: activeTeam, type: "asset", iconUrl: asset.image_path, heroName: asset.name
     };
+
     const nextMarkers = [...markers, newMarker];
     setMarkers(nextMarkers);
     pushToHistory(nextMarkers, drawings);
@@ -630,12 +635,15 @@ const TacMap: React.FC = () => {
       const B = py - y1;
       const C = x2 - x1;
       const D = y2 - y1;
+
       const dot = A * C + B * D;
       const len_sq = C * C + D * D;
+
       let param = -1;
       if (len_sq !== 0) param = dot / len_sq;
 
       let xx, yy;
+
       if (param < 0) { xx = x1; yy = y1; }
       else if (param > 1) { xx = x2; yy = y2; }
       else { xx = x1 + param * C; yy = y1 + param * D; }
@@ -648,9 +656,7 @@ const TacMap: React.FC = () => {
   };
 
   const handleMapClick = (e: React.MouseEvent) => {
-    // If it's a right click, ignore map click interactions
     if (e.button === 2) return;
-
     if (!selectedMap || spacePressed || isPanning) return;
     const { x, y } = getCoords(e);
 
@@ -687,8 +693,6 @@ const TacMap: React.FC = () => {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!selectedMap) return;
-
-    // Detect Space bar, Middle click (1), or Right click (2)
     if (spacePressed || e.button === 1 || e.button === 2) {
       e.preventDefault();
       setIsPanning(true);
@@ -824,8 +828,21 @@ const TacMap: React.FC = () => {
           <div style={{ fontSize: "20px", marginBottom: "20px", fontWeight: "bold" }}>
             Map: <span style={{ color: "#f65dfb" }}>{selectedMap || "None Selected"}</span>
           </div>
-          
-          <button onClick={() => setIsMapSelectorOpen(true)} onMouseEnter={() => setIsMapButtonHovered(true)} onMouseLeave={() => setIsMapButtonHovered(false)} style={{ width: "100%", padding: "14px", background: "linear-gradient(45deg, #e60082, #f65dfb)", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bolder", fontSize: "16px", marginBottom: "15px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out", transform: isMapButtonHovered ? "scale(1.02)" : "scale(1)", boxShadow: isMapButtonHovered ? "0 6px 15px rgba(246, 93, 251, 0.5)" : "0 4px 10px rgba(230, 0, 130, 0.35)", }}>
+
+          <button
+            onClick={() => setIsMapSelectorOpen(true)}
+            onMouseEnter={() => setIsMapButtonHovered(true)}
+            onMouseLeave={() => setIsMapButtonHovered(false)}
+            style={{
+              width: "100%", padding: "14px", background: "linear-gradient(45deg, #e60082, #f65dfb)",
+              color: "white", border: "none", borderRadius: "8px", cursor: "pointer",
+              fontWeight: "bolder", fontSize: "16px", marginBottom: "15px", display: "flex",
+              alignItems: "center", justifyContent: "center", gap: "8px",
+              transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+              transform: isMapButtonHovered ? "scale(1.02)" : "scale(1)",
+              boxShadow: isMapButtonHovered ? "0 6px 15px rgba(246, 93, 251, 0.5)" : "0 4px 10px rgba(230, 0, 130, 0.35)",
+            }}
+          >
             {selectedMap ? "Change Map" : "Select Map"}
           </button>
 
@@ -853,23 +870,13 @@ const TacMap: React.FC = () => {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", overflowY: "auto", flexGrow: 1 }}>
               {heroAssets.filter(h => h.hero_roles === activeRoleTab).map(asset => {
-                  const isOnCurrentTeam = (activeTeam === "ally" ? allyMarkers : enemyMarkers).some(m => m.heroName === asset.name);
-                  return (
-                    <div 
-                      key={asset.asset_id} 
-                      draggable={!!selectedMap && !isOnCurrentTeam} 
-                      onDragStart={(e) => e.dataTransfer.setData("assetData", JSON.stringify(asset))} 
-                      style={{ 
-                        cursor: (selectedMap && !isOnCurrentTeam) ? "grab" : "not-allowed", 
-                        textAlign: "center", padding: "5px", background: "#333", 
-                        borderRadius: "4px", border: "1px solid #444",
-                        opacity: isOnCurrentTeam ? 0.3 : 1
-                      }}
-                    >
-                      <img src={asset.image_path} alt={asset.name} style={{ width: "50px", height: "50px", borderRadius: "4px" }} />
-                      <div style={{ fontSize: "10px", marginTop: "4px" }}>{asset.name}</div>
-                    </div>
-                  );
+                const isOnCurrentTeam = (activeTeam === "ally" ? allyMarkers : enemyMarkers).some(m => m.heroName === asset.name);
+                return (
+                  <div key={asset.asset_id} draggable={!!selectedMap && !isOnCurrentTeam} onDragStart={(e) => e.dataTransfer.setData("assetData", JSON.stringify(asset))} style={{ cursor: (selectedMap && !isOnCurrentTeam) ? "grab" : "not-allowed", textAlign: "center", padding: "5px", background: "#333", borderRadius: "4px", border: "1px solid #444", opacity: isOnCurrentTeam ? 0.3 : 1 }}>
+                    <img src={asset.image_path} alt={asset.name} style={{ width: "50px", height: "50px", borderRadius: "4px" }} />
+                    <div style={{ fontSize: "10px", marginTop: "4px" }}>{asset.name}</div>
+                  </div>
+                );
               })}
             </div>
           </div>
@@ -878,177 +885,177 @@ const TacMap: React.FC = () => {
 
       {/* VIEWPORT: INTERACTIVE TACTICAL OVERLAY */}
       <div 
-        ref={mapRef} 
-        onWheel={handleWheel}
-        onDragOver={(e) => e.preventDefault()} 
-        onDrop={handleDrop} 
-        onClick={handleMapClick}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onContextMenu={(e) => e.preventDefault()} // Blocks context menu for right-click drag
-        style={{ 
-          flex: 1, 
-          display: "flex", 
-          backgroundColor: "#000000", 
-          position: "relative", 
-          minWidth: 0, 
-          justifyContent: "center", 
-          alignItems: "center",
-          overflow: "hidden", 
-          cursor: spacePressed || isPanning ? "grabbing" : selectedMap ? "default" : "not-allowed"
-        }}
+        ref={mapRef} onWheel={handleWheel} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}
+        onClick={handleMapClick} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+        onContextMenu={(e) => e.preventDefault()}
+        style={{ flex: 1, display: "flex", backgroundColor: "#000000", position: "relative", minWidth: 0, justifyContent: "center", alignItems: "center", overflow: "hidden", cursor: spacePressed || isPanning ? "grabbing" : selectedMap ? "default" : "not-allowed" }}
       >
-        
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ position: "absolute", top: "20px", left: "10px", zIndex: 15, background: "rgba(230, 0, 130, 0.8)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(0,0,0,0.3)", transition: "left 0.3s ease, background 0.2s" }} title={sidebarOpen ? "Close Map Sidebar" : "Open Map Sidebar"}>{sidebarOpen ? "«" : "»"}</button>
-
-        <div 
-          style={{ 
-            width: "100%", 
-            height: "100%", 
-            position: "relative", 
-            backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`, 
-            backgroundSize: "contain", 
-            backgroundRepeat: "no-repeat", 
-            backgroundPosition: "center", 
-            backgroundColor: "#000000", 
-            opacity: selectedMap ? 1 : 0.6, 
-            aspectRatio: "1000 / 600", 
-            maxHeight: "100%", 
-            maxWidth: "100%", 
-            margin: "auto",
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            transformOrigin: "center center",
-            transition: isPanning ? "none" : "transform 0.05s ease-out", 
-            pointerEvents: selectedMap ? "auto" : "none"
-          }}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          style={{ position: "absolute", top: "20px", left: "10px", zIndex: 15, background: "rgba(230, 0, 130, 0.8)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(0,0,0,0.3)", transition: "left 0.3s ease, background 0.2s" }}
+          title={sidebarOpen ? "Close Map Sidebar" : "Open Map Sidebar"}
         >
-          
-          {!selectedMap && (
-              <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%) scale(1)", color: "#888", zIndex: 10, pointerEvents: "none", textAlign: "center" }}>
-                  <p style={{ fontSize: "20px", fontWeight: "bold", color: "#f65dfb" }}>← Please Select a Map to Start</p>
-              </div>
-          )}
+          {sidebarOpen ? "«" : "»"}
+        </button>
 
-          <canvas 
-            ref={canvasRef} 
-            width={1000} 
-            height={600} 
-            style={{ 
-              position: "absolute", top: 0, left: 0, width: "100%", height: "100%", 
-              cursor: activeTool === "pen" ? "crosshair" : activeTool === "eraser" ? "cell" : "default", 
-              zIndex: 2
-            }} 
-          />
-
-          {markers.map(m => {
-            const isSelected = selectedElement?.type === "marker" && selectedElement.id === m.id;
-            return (
-              <div key={m.id} style={{ position: "absolute", left: `${(m.x / 1000) * 100}%`, top: `${(m.y / 600) * 100}%`, width: "40px", height: "40px", transform: "translate(-50%, -50%)", zIndex: 5, pointerEvents: "none", cursor: "pointer" }}>
-                {m.type === "player" ? (
-                    <div style={{ width: "100%", height: "100%", background: m.team === "ally" ? "#007bff" : "#dc3545", border: isSelected ? "3px solid #f65dfb" : "2px solid white", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>{m.label}</div>
-                ) : (
-                    <img src={m.iconUrl} style={{ width: "100%", borderRadius: "50%", border: isSelected ? "3px solid #f65dfb" : `2px solid ${m.team === "ally" ? "#007bff" : "#dc3545"}`, background: "#222" }} alt={m.heroName} />
-                )}
-              </div>
-            );
-          })}
+        <div style={{ 
+          width: "100%", height: "100%", position: "relative",
+          backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`,
+          backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center",
+          backgroundColor: "#000000", opacity: selectedMap ? 1 : 0.6,
+          aspectRatio: "1000 / 600", maxHeight: "100%", maxWidth: "100%", margin: "auto",
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "center center", transition: isPanning ? "none" : "transform 0.05s ease-out",
+          pointerEvents: selectedMap ? "auto" : "none"
+        }}>
+          <canvas ref={canvasRef} width={1000} height={600} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 5, pointerEvents: "none" }} />
+          {markers.map(marker => (
+            <div
+              key={marker.id}
+              style={{
+                position: "absolute", left: `${(marker.x / 1000) * 100}%`, top: `${(marker.y / 600) * 100}%`,
+                width: "44px", height: "44px", borderRadius: "50%",
+                border: selectedElement?.id === marker.id ? "3px solid #f65dfb" : `2px solid ${marker.team === "ally" ? "#007bff" : "#dc3545"}`,
+                boxShadow: marker.team === "ally" ? "0 0 15px rgba(0, 123, 255, 0.5)" : "0 0 15px rgba(220, 53, 69, 0.5)",
+                backgroundImage: `url(${marker.iconUrl})`, backgroundSize: "cover", transform: "translate(-50%, -50%)",
+                zIndex: 10, cursor: activeTool === "select" ? "grab" : "default"
+              }}
+              onMouseDown={(e) => {
+                if (activeTool === "select") {
+                  e.stopPropagation();
+                  setSelectedElement({ type: "marker", id: marker.id });
+                  setIsDraggingElement(true);
+                }
+              }}
+            >
+              {marker.label && (
+                <div style={{ position: "absolute", bottom: "-18px", left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.7)", padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                  {marker.label}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
-        {selectedMap && (
-          <div style={{ position: "absolute", bottom: "20px", left: "20px", zIndex: 15, background: "rgba(0,0,0,0.6)", padding: "5px 10px", borderRadius: "4px", color: "#aaa", fontSize: "12px", pointerEvents: "none" }}>
-            Zoom: {Math.round(zoom * 100)}% | Hold Space, Middle Click, or Right Click + Drag to Pan
+        {/* BOTTOM TOOLBAR */}
+        <div style={{ position: "absolute", bottom: "30px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "15px", background: "rgba(22, 22, 22, 0.9)", padding: "10px 20px", borderRadius: "12px", border: "1px solid #333", backdropFilter: "blur(10px)", zIndex: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", opacity: selectedMap ? 1 : 0.5, pointerEvents: selectedMap ? "auto" : "none" }}>
+          <ToolButton name="select" icon={<SelectIcon />} activeTool={activeTool} onClick={setActiveTool} title="Select/Move (S)" />
+          <ToolButton name="pen" icon={<PenIcon />} activeTool={activeTool} onClick={setActiveTool} title="Pen Tool (P)" />
+          <ToolButton name="eraser" icon={<EraserIcon />} activeTool={activeTool} onClick={setActiveTool} title="Eraser Tool (E)" />
+          
+          <div style={{ width: "1px", background: "#444", margin: "0 5px" }} />
+          
+          <button onClick={handleUndo} disabled={historyIndex === 0} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex === 0 ? "not-allowed" : "pointer", opacity: historyIndex === 0 ? 0.5 : 1 }} title="Undo (Ctrl+Z)"><UndoIcon /></button>
+          <button onClick={handleRedo} disabled={historyIndex === history.length - 1} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex === history.length - 1 ? "not-allowed" : "pointer", opacity: historyIndex === history.length - 1 ? 0.5 : 1 }} title="Redo (Ctrl+Y)"><RedoIcon /></button>
+          
+          <div style={{ width: "1px", background: "#444", margin: "0 5px" }} />
+          
+          <button onClick={deleteSelectedElement} disabled={!selectedElement} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: selectedElement ? "#c4302b" : "#333", color: "white", cursor: selectedElement ? "pointer" : "not-allowed", opacity: selectedElement ? 1 : 0.5 }} title="Delete Selected (Del)"><TrashIcon /></button>
+        </div>
+
+        {/* BRUSH SIZE SLIDER (Floating above pen) */}
+        {activeTool === "pen" && (
+          <div style={{ position: "absolute", bottom: "100px", left: "50%", transform: "translateX(-50%)", background: "rgba(22, 22, 22, 0.95)", padding: "12px 20px", borderRadius: "30px", border: "1px solid #f65dfb", display: "flex", alignItems: "center", gap: "15px", zIndex: 25, boxShadow: "0 0 20px rgba(246, 93, 251, 0.3)" }}>
+             <span style={{ fontSize: "12px", fontWeight: "bold", color: "#f65dfb" }}>Brush: {brushSize}px</span>
+             <input type="range" min="1" max="20" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} onMouseDown={() => setIsSlidingBrush(true)} onMouseUp={() => setIsSlidingBrush(false)} style={{ cursor: "pointer", accentColor: "#f65dfb" }} />
           </div>
         )}
 
-        <button onClick={() => setRightSidebarOpen(!rightSidebarOpen)} style={{ position: "absolute", top: "20px", right: rightSidebarOpen ? "25px" : "20px", zIndex: 15, background: "rgba(230, 0, 130, 0.8)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(0,0,0,0.3)", transition: "right 0.3s ease, background 0.2s" }} title={rightSidebarOpen ? "Close Toolbar" : "Open Toolbar"}>{rightSidebarOpen ? "»" : "«"}</button>
+        {/* ZOOM INDICATOR */}
+        <div style={{ position: "absolute", top: "20px", right: "20px", background: "rgba(0,0,0,0.6)", padding: "8px 12px", borderRadius: "6px", fontSize: "14px", fontWeight: "bold", color: "#aaa", zIndex: 10 }}>
+          Zoom: {Math.round(zoom * 100)}%
+        </div>
+      </div>
 
-        {rightSidebarOpen && (activeTool === "pen" || isSlidingBrush) && (
-          <div style={{ position: "absolute", top: "65px", right: "20px", zIndex: 15, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", background: "#222", padding: "10px 6px", borderRadius: "8px", border: "1px solid #444", boxShadow: "0 4px 10px rgba(0,0,0,0.4)" }}>
-            <span style={{ fontSize: "11px", color: "#aaa" }}>Size</span>
-            <input 
-              type="range" 
-              min="1" 
-              max="15" 
-              value={brushSize} 
-              onMouseDown={() => setIsSlidingBrush(true)}
-              onMouseUp={() => setIsSlidingBrush(false)}
-              onChange={(e) => setBrushSize(Number(e.target.value))}
-              style={{ writingMode: "vertical-lr", direction: "rtl", appearance: "slider-vertical" as any, width: "15px", height: "100px", cursor: "pointer" }}
-            />
-            <span style={{ fontSize: "11px", color: "#f65dfb", fontWeight: "bold" }}>{brushSize}</span>
+      {/* RIGHT SIDEBAR (STRATEGY PANEL) */}
+      <div style={{ width: rightSidebarOpen ? "320px" : "0px", background: "#161616", borderLeft: rightSidebarOpen ? "1px solid #282828" : "none", display: "flex", flexDirection: "column", transition: "width 0.3s ease", overflow: "hidden", flexShrink: 0 }}>
+        <div style={{ padding: "20px", minWidth: "320px", height: "100%", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h3 style={{ fontSize: "18px", color: "#f65dfb", margin: 0 }}>Team Overview</h3>
+            <button onClick={() => setRightSidebarOpen(false)} style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "18px" }}>×</button>
           </div>
-        )}
+
+          <div style={{ flex: 1, overflowY: "auto" }}>
+             <div style={{ marginBottom: "25px" }}>
+                <h4 style={{ fontSize: "12px", color: "#888", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "15px", borderBottom: "1px solid #333", paddingBottom: "5px" }}>Ally Team</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {allyMarkers.length === 0 && <div style={{ color: "#444", fontStyle: "italic", fontSize: "13px" }}>No allies placed</div>}
+                  {allyMarkers.map(m => (
+                    <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "12px", background: "#222", padding: "8px", borderRadius: "6px", borderLeft: "3px solid #007bff" }}>
+                      <img src={m.iconUrl} style={{ width: "32px", height: "32px", borderRadius: "4px" }} alt="" />
+                      <span style={{ fontSize: "14px", fontWeight: "500" }}>{m.heroName}</span>
+                    </div>
+                  ))}
+                </div>
+             </div>
+
+             <div>
+                <h4 style={{ fontSize: "12px", color: "#888", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "15px", borderBottom: "1px solid #333", paddingBottom: "5px" }}>Enemy Team</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {enemyMarkers.length === 0 && <div style={{ color: "#444", fontStyle: "italic", fontSize: "13px" }}>No enemies placed</div>}
+                  {enemyMarkers.map(m => (
+                    <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "12px", background: "#222", padding: "8px", borderRadius: "6px", borderLeft: "3px solid #dc3545" }}>
+                      <img src={m.iconUrl} style={{ width: "32px", height: "32px", borderRadius: "4px" }} alt="" />
+                      <span style={{ fontSize: "14px", fontWeight: "500" }}>{m.heroName}</span>
+                    </div>
+                  ))}
+                </div>
+             </div>
+          </div>
+
+          {selectedMap && (
+            <div style={{ marginTop: "20px", padding: "15px", background: "rgba(246, 93, 251, 0.05)", borderRadius: "8px", border: "1px dashed rgba(246, 93, 251, 0.3)" }}>
+              <div style={{ fontSize: "11px", color: "#f65dfb", marginBottom: "5px", fontWeight: "bold" }}>PRO TIP</div>
+              <div style={{ fontSize: "12px", color: "#aaa", lineHeight: "1.5" }}>
+                Use <b>Space + Drag</b> to pan the map, and <b>Mouse Wheel</b> to zoom in/out.
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* TOOLBAR: DRAWING AND EDITING UTILITIES */}
-      <div style={{ width: rightSidebarOpen ? "85px" : "0px", background: "#161616", borderLeft: rightSidebarOpen ? "1px solid #282828" : "none", display: "flex", flexDirection: "column", padding: rightSidebarOpen ? "20px 10px" : "0px", overflow: "hidden", transition: "width 0.3s ease", flexShrink: 0, alignItems: "center", gap: "15px", zIndex: 10 }}>
-        {rightSidebarOpen && (
-          <>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", alignItems: "center" }}>
-              <ToolButton name="select" icon={<SelectIcon />} activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "select" ? null : tool)} disabled={!selectedMap} title="Select or Move assets (S)" />
-              <ToolButton name="pen" icon={<PenIcon />} activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "pen" ? null : tool)} disabled={!selectedMap} title="Draw lines (P)" />
-              <ToolButton name="eraser" icon={<EraserIcon />} activeTool={activeTool} onClick={(tool) => setActiveTool(activeTool === "eraser" ? null : tool)} disabled={!selectedMap} title="Erase drawings (E)" />
-            </div>
+      {!rightSidebarOpen && (
+        <button onClick={() => setRightSidebarOpen(true)} style={{ position: "absolute", top: "20px", right: "10px", zIndex: 15, background: "rgba(23, 23, 23, 0.8)", border: "1px solid #333", color: "#f65dfb", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold" }}>📋</button>
+      )}
 
-            <div style={{ height: "1px", background: "#333", width: "100%", margin: "5px 0" }} />
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%", alignItems: "center" }}>
-              <button onClick={handleUndo} disabled={historyIndex === 0} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex === 0 ? "not-allowed" : "pointer", display: "flex", justifyContent: "center", alignItems: "center", opacity: historyIndex === 0 ? 0.3 : 1, transition: "transform 0.2s" }} title="Undo (Ctrl+Z)">
-                <UndoIcon />
-              </button>
-              <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: "#333", color: "white", cursor: historyIndex >= history.length - 1 ? "not-allowed" : "pointer", display: "flex", justifyContent: "center", alignItems: "center", opacity: historyIndex >= history.length - 1 ? 0.3 : 1, transition: "transform 0.2s" }} title="Redo (Ctrl+Y)">
-                <RedoIcon />
-              </button>
-            </div>
-
-            <div style={{ height: "1px", background: "#333", width: "100%", margin: "5px 0" }} />
-
-            <button onClick={deleteSelectedElement} disabled={!selectedElement} style={{ width: "50px", height: "50px", borderRadius: "8px", border: "none", background: selectedElement ? "#c4302b" : "#333", color: "white", cursor: selectedElement ? "pointer" : "not-allowed", display: "flex", justifyContent: "center", alignItems: "center", transition: "transform 0.2s, background 0.2s", transform: selectedElement ? "scale(1)" : "scale(0.95)", boxShadow: selectedElement ? "0 4px 10px rgba(196, 48, 43, 0.3)" : "none" }} title="Delete selected item (Del)">
-              <TrashIcon />
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* MODAL INTERLAYS */}
+      {/* MAP SELECTOR MODAL */}
       {isMapSelectorOpen && (
-        <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)" }}>
-          <div style={{ background: "#161616", padding: "30px", borderRadius: "12px", border: "1px solid #282828", boxShadow: "0 0 30px rgba(230, 0, 130, 0.2)", width: "800px", maxWidth: "90vw", maxHeight: "80vh", display: "flex", flexDirection: "column", position: "relative" }}>
-            <button onClick={() => setIsMapSelectorOpen(false)} style={{ position: "absolute", top: "15px", right: "15px", background: "transparent", border: "none", color: "#666", fontSize: "24px", cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.color = "#f65dfb"} onMouseLeave={(e) => e.currentTarget.style.color = "#666"} title="Close">×</button>
-            <h3 style={{ color: "#f65dfb", marginBottom: "20px", fontSize: "22px", fontWeight: "750", textAlign: "center" }}>Select a Map</h3>
-            <div style={{ display: "flex", flexGrow: 1, minHeight: 0, gap: "30px", overflow: "hidden", alignItems: "center" }}>
-              <div style={{ flex: "1 1 50%", overflowY: "auto", paddingRight: "10px" }}>
-                <div style={{ marginBottom: "20px", marginTop: selectedMode ? "0px" : "30px", transition: "margin-top 0.3s ease-in-out" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#aaa" }}>1. Game Mode</h4>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {gameModes.map((mode) => (
-                      <button key={mode} onClick={() => { setSelectedMode(selectedMode === mode ? null : mode); }} style={{ padding: "8px 12px", background: selectedMode === mode ? "#e60082" : "#333", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>{mode}</button>
-                    ))}
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.9)", display: "flex", flexDirection: "column", zIndex: 2000, padding: "40px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", maxWidth: "1200px", width: "100%", margin: "0 auto 30px auto" }}>
+            <h2 style={{ fontSize: "32px", fontWeight: "800", background: "linear-gradient(45deg, #fff, #f65dfb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Select Battlefield</h2>
+            <button onClick={() => setIsMapSelectorOpen(false)} style={{ background: "#333", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>Back to Map</button>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", marginBottom: "30px", justifyContent: "center" }}>
+            {gameModes.map(mode => (
+              <button key={mode} onClick={() => setSelectedMode(mode)} style={{ padding: "12px 24px", background: selectedMode === mode ? "linear-gradient(45deg, #e60082, #f65dfb)" : "#1a1a1a", color: "white", border: selectedMode === mode ? "none" : "1px solid #333", borderRadius: "30px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}>{mode}</button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", maxWidth: "1200px", width: "100%", margin: "0 auto" }}>
+            {selectedMode ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "25px" }}>
+                {filteredMaps.map(m => (
+                  <div key={m.map_id} onClick={() => { setSelectedMap(m.name); setIsMapSelectorOpen(false); }} onMouseEnter={() => setHoveredMap(m)} onMouseLeave={() => setHoveredMap(null)} style={{ position: "relative", height: "160px", borderRadius: "12px", overflow: "hidden", cursor: "pointer", border: "2px solid #282828", transition: "all 0.3s ease" }}>
+                    <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", backgroundImage: `url(${m.image_path})`, backgroundSize: "cover", backgroundPosition: "center", transition: "transform 0.5s ease", transform: hoveredMap?.map_id === m.map_id ? "scale(1.1)" : "scale(1)" }} />
+                    <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", padding: "20px", background: "linear-gradient(transparent, rgba(0,0,0,0.9))", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                      <span style={{ fontSize: "18px", fontWeight: "bold" }}>{m.name}</span>
+                    </div>
                   </div>
-                </div>
-                <div style={{ marginBottom: "25px", opacity: selectedMode ? 1 : 0, transition: "opacity 0.4s ease-in-out", pointerEvents: selectedMode ? "auto" : "none" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#aaa" }}>2. Choose Map</h4>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {!selectedMode ? <p style={{ color: "#666", fontSize: "13px" }}>Please select a game mode first.</p> : filteredMaps.length === 0 ? <p style={{ color: "#666", fontSize: "13px" }}>No maps found.</p> : filteredMaps.map((map) => (
-                      <button key={map.map_id} onMouseEnter={() => setHoveredMap(map)} onMouseLeave={() => setHoveredMap(null)} onClick={() => { setSelectedMap(map.name); setHoveredMap(null); setIsMapSelectorOpen(false); }} style={{ padding: "6px 10px", background: selectedMap === map.name ? "#f65dfb" : "#444", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "13px" }}>{map.name}</button>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
-              <div style={{ width: "350px", height: "350px", background: "#111", borderRadius: "8px", border: "1px solid #333", display: "flex", justifyContent: "center", alignItems: "center", overflow: "hidden", position: "relative" }}>
-                {hoveredMap?.image_path ? (
-                  <img src={hoveredMap.image_path} alt={hoveredMap.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ color: "#555", fontSize: "14px" }}>Hover over a map to preview</div>
-                )}
+            ) : (
+              <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", color: "#444" }}>
+                <div style={{ fontSize: "60px", marginBottom: "20px" }}>🗺️</div>
+                <h3 style={{ fontSize: "24px" }}>Choose a Game Mode to see maps</h3>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      <CustomModal isOpen={isDuplicateNameModalOpen} title="Name Already Exists" onConfirm={() => { setIsDuplicateNameModalOpen(false); setIsNameModalOpen(true); }} showCancel={false} confirmText="Try Different Name">
+      {/* ADDITIONAL MODALS */}
+      <CustomModal isOpen={isDuplicateNameModalOpen} title="Name Taken" onConfirm={() => setIsDuplicateNameModalOpen(false)} showCancel={false}>
         <p style={{ color: "#aaa" }}>You already have a strategy named "<strong>{newStrategyName}</strong>". Please choose a unique name.</p>
       </CustomModal>
 
@@ -1071,9 +1078,7 @@ const TacMap: React.FC = () => {
         showCancel={true} 
         confirmText="Log In"
       >
-        <p style={{ color: "#aaa" }}>
-          Sign in or log back in to save maps.
-        </p>
+        <p style={{ color: "#aaa" }}>You must be signed in to save your tactical plans.</p>
       </CustomModal>
     </div>
   );

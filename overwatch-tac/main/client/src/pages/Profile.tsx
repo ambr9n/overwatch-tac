@@ -4,9 +4,6 @@ import { supabase } from "../Supabase";
 
 const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
-/**
- * CUSTOM MODAL COMPONENT (Direct Copy from Forum.tsx)
- */
 const CustomModal: React.FC<{
   isOpen: boolean;
   title: string;
@@ -59,7 +56,6 @@ export default function Profile() {
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
 
-  // --- SETTINGS STATE ---
   const [showSettings, setShowSettings] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [newBio, setNewBio] = useState("");
@@ -180,7 +176,6 @@ export default function Profile() {
   const handleFollowToggle = async () => {
     if (!currentUser || !profile) return;
       if (isFollowing) {
-        // Unfollow logic
         const { error } = await supabase
           .from("User_Follows")
           .delete()
@@ -190,7 +185,6 @@ export default function Profile() {
         if (error) throw error;
         setIsFollowing(false);
       } else {
-        // Follow logic
         const { error } = await supabase
           .from("User_Follows")
           .insert([{ 
@@ -266,8 +260,6 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 850, margin: "80px auto", padding: 20, color: "white", fontFamily: 'sans-serif' }}>
-      
-      {/* DELETE MODAL */}
       <CustomModal 
         isOpen={deleteModal.isOpen} 
         title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} 
@@ -279,7 +271,6 @@ export default function Profile() {
         {deleteModal.type === 'post' ? "Are you sure? This will permanently delete this post and ALL replies." : "Are you sure? This will permanently delete this reply and all sub-replies."}
       </CustomModal>
 
-      {/* SETTINGS POPUP MODAL */}
       <CustomModal
         isOpen={showSettings}
         title="Account Settings"
@@ -343,7 +334,6 @@ export default function Profile() {
             </button>
           )}
         
-        {/* GEAR ICON TOGGLE (Only for owner) */}
         {currentUser?.id === profile.user_id && (
           <button 
             onClick={() => setShowSettings(true)}

@@ -23,7 +23,7 @@ const ModalShell = ({ title, children, onClose, onConfirm, confirmText, isDelete
 
 export default function Teams() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"my_teams" | "discover">("my_teams");
+  const [activeTab, setActiveTab] = useState<"my_teams" | "discover" | "invites">("my_teams");
   const [teams, setTeams] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -55,6 +55,12 @@ export default function Teams() {
   const [nameConflict, setNameConflict] = useState<{ show: boolean; name: string }>({ show: false, name: "" });
   const [duplicateSave, setDuplicateSave] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [invites, setInvites] = useState<any[]>([]); 
+  const [visibility, setVisibility] = useState<"public" | "invite_only" | "closed">("public");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
@@ -114,74 +120,72 @@ export default function Teams() {
     isFetchingRef.current = true;
     setLoading(true);
 
-    if (reset) {
-        pageRef.current = 0;
-        setHasMore(true);
-    }
-    
+    if (reset) { pageRef.current = 0; setHasMore(true); }
     const from = pageRef.current * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const baseQuery = supabase
-        .from("Teams")
-        .select(`
-            team_id, name, description, profile_image_link, 
-            User_Teams(user_id, role, Users(username))
-        `);
+    if (activeTab === "invites") {
+      const { data } = await supabase.from("User_Teams")
+        .select(`team_id, Teams(team_id, name, description, visibility, profile_image_link)`)
+        .eq("user_id", currentUser.id)
+        .eq("status", "pending");
+      
+      const validInvites = data?.filter(i => {
+        const t = Array.isArray(i.Teams) ? i.Teams[0] : i.Teams;
+        return t?.visibility === 'invite_only';
+      }).map(i => Array.isArray(i.Teams) ? i.Teams[0] : i.Teams) || [];
 
-    if (activeTab === "my_teams") {
-      const { data: membershipData } = await supabase
-        .from("User_Teams")
-        .select("team_id")
-        .eq("user_id", currentUser.id);
-
+      setInvites(validInvites);
+      setHasMore(false);
+    } else if (activeTab === "my_teams") {
+      const { data: membershipData } = await supabase.from("User_Teams")
+        .select("team_id").eq("user_id", currentUser.id).eq("status", "accepted");
       const teamIds = membershipData?.map(m => m.team_id) || [];
-
-      if (teamIds.length === 0) {
-        setTeams([]);
-        setHasMore(false);
-        setLoading(false);
-        isFetchingRef.current = false;
-        return;
-      }
-
-      const { data, error } = await baseQuery.in("team_id", teamIds);
-
-      if (!error && data) {
-        const processed = data.map(t => {
-          const ownerEntry = t.User_Teams.find((ut: any) => ut.role === 'owner');
-          return {
-            ...t,
-            owner_name: extractUsername(ownerEntry),
-            member_count: t.User_Teams?.length || 0,
-            is_member: true 
-          };
-        });
-        setTeams(processed);
+      if (teamIds.length === 0) { setTeams([]); setHasMore(false); }
+      else {
+        const { data } = await supabase.from("Teams").select(`*, User_Teams(user_id, role, Users(username))`).in("team_id", teamIds);
+        setTeams(data?.map(t => ({ ...t, is_member: true })) || []);
         setHasMore(false);
       }
     } else {
-      let query = baseQuery.range(from, to).order('name', { ascending: true });
+      let query = supabase.from("Teams").select(`*, User_Teams(user_id, role, Users(username))`).range(from, to).order('name');
       if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
-
-      const { data, error } = await query;
-      if (!error && data) {
-        const processed = data.map(t => {
-          const members = t.User_Teams || [];
-          const isFriendInside = members.some((m: any) => socialIds.includes(m.user_id));
-          const isMember = members.some((m: any) => m.user_id === currentUser.id);
-          const ownerEntry = members.find((m: any) => m.role === 'owner');
-          return { ...t, owner_name: extractUsername(ownerEntry), member_count: members.length, has_social: isFriendInside, is_member: isMember };
-        });
-        const discoverOnly = processed.filter(t => !t.is_member);
-        setTeams(prev => reset ? discoverOnly : [...prev, ...discoverOnly]);
+      const { data } = await query;
+      if (data) {
+        const processed = data.map(t => ({ ...t, is_member: t.User_Teams?.some((m:any) => m.user_id === currentUser.id) }));
+        const discoverable = processed.filter(t => !t.is_member && t.visibility !== 'closed');
+        setTeams(prev => reset ? discoverable : [...prev, ...discoverable]);
         setHasMore(data.length === PAGE_SIZE);
         pageRef.current += 1;
       }
     }
     setLoading(false);
     isFetchingRef.current = false;
-  }, [activeTab, currentUser, socialIds, searchQuery]);
+  }, [activeTab, currentUser, searchQuery]);
+
+  const handleAcceptInvite = async (teamId: string) => {
+    const { error } = await supabase.from("User_Teams")
+      .update({ status: 'accepted' })
+      .eq("team_id", teamId)
+      .eq("user_id", currentUser.id);
+    
+    if (!error) {
+      setIsSuccess({ show: true, msg: "Invite accepted!" });
+      fetchTeams(true);
+    }
+  };
+
+  const handleDeclineInvite = async (teamId: string) => {
+    const { error } = await supabase.from("User_Teams")
+      .delete()
+      .eq("team_id", teamId)
+      .eq("user_id", currentUser.id);
+    
+    if (!error) {
+      setIsSuccess({ show: true, msg: "Invite declined." });
+      fetchTeams(true);
+    }
+  };
 
   const lastElementRef = useCallback((node: HTMLDivElement) => {
     if (activeTab !== "discover" || loading || !hasMore) return;
@@ -204,8 +208,8 @@ export default function Teams() {
     if (!team?.team_id || !currentUser) return;
     
     const [{ data: freshTeam }, { data: members }, { data: saves }] = await Promise.all([
-      supabase.from("Teams").select(`team_id, name, description, profile_image_link`).eq("team_id", team.team_id).single(),
-      supabase.from("User_Teams").select(`user_id, role, Users(username)`).eq("team_id", team.team_id),
+      supabase.from("Teams").select(`team_id, name, description, profile_image_link, visibility`).eq("team_id", team.team_id).single(),
+      supabase.from("User_Teams").select(`user_id, role, Users(username)`).eq("team_id", team.team_id).eq("status", "accepted"),
       supabase.from("Team_Saves").select(`save_id, owner_id, is_pinned, folder_name, Saved_Maps(save_id, name, description, Maps(name)), Users(username)`).eq("team_id", team.team_id)
     ]);
 
@@ -233,7 +237,6 @@ export default function Teams() {
       owner_name: extractUsername(ownerEntry)
     });
 
-    // Update image reference for future reverts
     if (freshTeam?.profile_image_link) {
       previousImageRef.current = freshTeam.profile_image_link;
     }
@@ -353,7 +356,7 @@ export default function Teams() {
 
   const handleJoinTeam = async () => {
     if (!currentUser || !selectedTeam) return;
-    const { error } = await supabase.from("User_Teams").insert([{ team_id: selectedTeam.team_id, user_id: currentUser.id, role: 'member' }]);
+    const { error } = await supabase.from("User_Teams").insert([{ team_id: selectedTeam.team_id, user_id: currentUser.id, role: 'member', status: 'accepted' }]);
     if (!error) {
         setIsSuccess({ show: true, msg: `Joined ${selectedTeam.name}!` });
         await fetchTeams(true); await fetchTeamData({ ...selectedTeam, is_member: true }); 
@@ -379,7 +382,6 @@ export default function Teams() {
       return;
     }
 
-    // Validate the Image URL
     if (teamIcon.trim()) {
       try {
         const response = await fetch(teamIcon, { method: 'HEAD' });
@@ -396,13 +398,14 @@ export default function Teams() {
       .update({ 
         name: teamName, 
         description: teamDesc, 
-        profile_image_link: teamIcon.trim() || null 
+        profile_image_link: teamIcon.trim() || null,
+        visibility: visibility
       })
       .eq("team_id", selectedTeam.team_id);
 
     if (!error) {
       setIsSettingsOpen(false);
-      const updatedTeam = { ...selectedTeam, name: teamName, description: teamDesc, profile_image_link: teamIcon };
+      const updatedTeam = { ...selectedTeam, name: teamName, description: teamDesc, profile_image_link: teamIcon, visibility: visibility };
       setSelectedTeam(updatedTeam);
       setTeams(prevTeams => prevTeams.map(t => t.team_id === selectedTeam.team_id ? { ...t, ...updatedTeam } : t));
       setIsSuccess({ show: true, msg: "Team updated successfully!" });
@@ -423,7 +426,6 @@ export default function Teams() {
       return;
     }
 
-    // Validate Image URL
     if (teamIcon.trim()) {
       try {
         const response = await fetch(teamIcon, { method: 'HEAD' });
@@ -438,7 +440,7 @@ export default function Teams() {
     const { data: newTeam, error: teamError } = await supabase.from("Teams").insert([{ name: teamName.trim(), description: teamDesc, profile_image_link: teamIcon.trim() || null }]).select().single();
     if (teamError) { if (teamError.code === '23505') setNameConflict({ show: true, name: teamName.trim() }); return; }
     if (newTeam) {
-      const { error: memberError } = await supabase.from("User_Teams").insert([{ team_id: newTeam.team_id, user_id: currentUser.id, role: 'owner' }]);
+      const { error: memberError } = await supabase.from("User_Teams").insert([{ team_id: newTeam.team_id, user_id: currentUser.id, role: 'owner', status: 'accepted' }]);
       if (!memberError) {
         setIsCreating(false); setTeamName(""); setTeamDesc(""); setTeamIcon("");
         setIsSuccess({ show: true, msg: `Team "${newTeam.name}" created successfully!` });
@@ -520,8 +522,9 @@ export default function Teams() {
               <div style={{ display: 'flex', gap: 30 }}>
                 <h1 onClick={() => setActiveTab("my_teams")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "my_teams" ? "white" : "#333" }}>My Teams</h1>
                 <h1 onClick={() => setActiveTab("discover")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "discover" ? "white" : "#333" }}>Discover</h1>
+                <h1 onClick={() => setActiveTab("invites")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "invites" ? "white" : "#333" }}>Invites</h1>
               </div>
-              <button onClick={() => { setTeamName(""); setTeamDesc(""); setTeamIcon(""); setIsCreating(true); }} style={{ background: "#f65dfb", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>+ Create Team</button>
+              <button onClick={() => { setTeamName(""); setTeamDesc(""); setTeamIcon(""); setVisibility(selectedTeam.visibility || "public"); setIsCreating(true); }} style={{ background: "#f65dfb", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>+ Create Team</button>
             </>
             ) : (
               <div style={{ width: '100%', textAlign: 'center', padding: '40px 0' }}>
@@ -530,26 +533,39 @@ export default function Teams() {
               </div>
             )}
           </div>
-
           {activeTab === "discover" && <input type="text" placeholder="Search for teams..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ ...inputStyle, marginBottom: 25 }} />}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-            {teams.map((team, index) => (
-              <div key={team.team_id} ref={index === teams.length - 1 ? lastElementRef : null} onClick={() => fetchTeamData(team)} onMouseEnter={() => setHoveredTeamId(team.team_id)} onMouseLeave={() => setHoveredTeamId(null)} style={{ background: "#0a0a0a", border: hoveredTeamId === team.team_id ? "1px solid #f65dfb" : "1px solid #1a1a1a", padding: "20px 25px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 20, cursor: 'pointer' }}>
-                {team.profile_image_link && <img src={team.profile_image_link} style={{ width: 60, height: 60, borderRadius: 10, objectFit: 'cover' }} alt="Team Icon" />}
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: 0, color: '#f65dfb' }}>{team.name}</h3>
-                  {team.has_social && activeTab === 'discover' && <span style={{ fontSize: 9, background: '#f65dfb22', color: '#f65dfb', padding: '2px 6px', borderRadius: 4, fontWeight: 800, verticalAlign: 'middle', marginLeft: 8 }}>SOCIAL MATCH</span>}
-                  <p style={{ color: '#666', fontSize: 13, margin: '4px 0' }}>{team.description || "No description."}</p>
+            {activeTab === "invites" ? (
+              invites.map((team) => (
+                <div key={team.team_id} style={{ background: "#0a0a0a", border: "1px solid #1a1a1a", padding: "20px 25px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 20 }}>
+                  {team.profile_image_link && <img src={team.profile_image_link} style={{ width: 60, height: 60, borderRadius: 10, objectFit: 'cover' }} alt="Team Icon" />}
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ margin: 0, color: '#f65dfb' }}>{team.name}</h3>
+                    <p style={{ color: '#666', fontSize: 13, margin: '4px 0' }}>{team.description || "No description."}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => handleAcceptInvite(team.team_id)} style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>Accept</button>
+                    <button onClick={() => handleDeclineInvite(team.team_id)} style={{ background: '#222', color: 'white', border: 'none', padding: '8px 16px', borderRadius: 6, fontWeight: 700, cursor: 'pointer' }}>Decline</button>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 10, color: '#444', fontWeight: 800 }}>{team.member_count} MEMBERS</div>
-                    <div style={{ fontSize: 10, color: '#f65dfb', fontWeight: 700, marginTop: 4 }}>OWNER: {team.owner_name}</div>
+              ))
+            ) : (
+              teams.map((team, index) => (
+                <div key={team.team_id} ref={index === teams.length - 1 ? lastElementRef : null} onClick={() => fetchTeamData(team)} onMouseEnter={() => setHoveredTeamId(team.team_id)} onMouseLeave={() => setHoveredTeamId(null)} style={{ background: "#0a0a0a", border: hoveredTeamId === team.team_id ? "1px solid #f65dfb" : "1px solid #1a1a1a", padding: "20px 25px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 20, cursor: 'pointer' }}>
+                  {team.profile_image_link && <img src={team.profile_image_link} style={{ width: 60, height: 60, borderRadius: 10, objectFit: 'cover' }} alt="Team Icon" />}
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ margin: 0, color: '#f65dfb' }}>{team.name}</h3>
+                    <p style={{ color: '#666', fontSize: 13, margin: '4px 0' }}>{team.description || "No description."}</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 10, color: '#444', fontWeight: 800 }}>{team.member_count || 0} MEMBERS</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
             {loading && <p style={{ textAlign: 'center', color: '#666' }}>Loading...</p>}
-            {!loading && teams.length === 0 && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>No teams found.</p>}
+            {!loading && (activeTab === "invites" ? invites.length === 0 : teams.length === 0) && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>Nothing here yet.</p>}
           </div>
         </div>
       ) : (
@@ -569,7 +585,25 @@ export default function Teams() {
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => setIsViewingMembers(true)} style={{ background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '10px 18px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Members</button>
                   {!selectedTeam.is_member ? (
-                     <button onClick={handleJoinTeam} style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Join Team</button>
+                    selectedTeam.visibility === 'invite_only' ? (
+                      <div style={{ 
+                        background: '#3e163f', 
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '10px 24px', 
+                        borderRadius: 8, 
+                        fontWeight: 700, 
+                        cursor: 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        Invite Only
+                      </div>
+                    ) : (
+                      <button onClick={handleJoinTeam} style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '10px 24px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
+                        Join Team
+                      </button>
+                    )
                   ) : (
                     <>
                       {(selectedTeam.user_role === 'owner' || selectedTeam.user_role === 'manager') && (
@@ -729,6 +763,20 @@ export default function Teams() {
           <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} style={{ ...inputStyle, height: 80, resize: 'none' }} />
           <label style={labelStyle}>Team Icon (URL)</label>
           <input type="text" value={teamIcon} onChange={e => setTeamIcon(e.target.value)} placeholder="Icon URL" style={inputStyle} />
+          {selectedTeam.user_role === 'owner' && (
+            <>
+              <label style={labelStyle}>Team Visibility</label>
+              <select 
+                value={visibility} 
+                onChange={(e: any) => setVisibility(e.target.value)} 
+                style={inputStyle}
+              >
+                <option value="public">Public (Anyone can join)</option>
+                <option value="invite_only">Invite Only (Must be invited)</option>
+                <option value="closed">Closed (Hidden from Discovery)</option>
+              </select>
+            </>
+          )}
           {selectedTeam.user_role === 'owner' && <button onClick={() => setIsDeletingTeam(true)} style={{ width: '100%', background: '#331111', color: '#ff4d4d', border: '1px solid #552222', padding: 12, borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', marginTop: 25 }}>Delete Team</button>}
         </ModalShell>
       )}
@@ -755,7 +803,7 @@ export default function Teams() {
       {nameConflict.show && (
         <ModalShell 
           title="Name Taken" 
-          zIndex={3000} // Sit on top of the 'New Team' modal
+          zIndex={3000}
           onClose={() => setNameConflict({ show: false, name: "" })} 
           showButtons={false} 
           globalFont={globalFont} 
@@ -766,7 +814,6 @@ export default function Teams() {
           </p>
         </ModalShell>
       )}
-      {/* --- ERROR MODAL --- */}
       {isErrorModalOpen.show && (
         <ModalShell title="Error" zIndex={4000} onClose={() => setIsErrorModalOpen({ show: false, msg: "" })} showButtons={false} globalFont={globalFont} isDelete={true}>
           <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>{isErrorModalOpen.msg}</p>

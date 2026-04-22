@@ -2,9 +2,6 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../Supabase';
 import { NavLink } from 'react-router-dom';
 
-/**
- * CUSTOM MODAL COMPONENT
- */
 const CustomModal: React.FC<{
   isOpen: boolean;
   title: string;
@@ -72,7 +69,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   
-  // Logic Refs
   const observer = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const pageRef = useRef(0);
@@ -184,8 +180,8 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
 
   const getUserData = (userField: any) => Array.isArray(userField) ? userField[0] : userField;
 
-  // Interactions
   const handleLike = async (postId: string) => {
+    await supabase.from("Post_Dislikes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     else await supabase.from("Post_Likes").insert([{ post_id: postId, user_id: currentUser.id }]);
@@ -193,6 +189,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   };
 
   const handleDislike = async (postId: string) => {
+    await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Post_Dislikes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Dislikes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     else await supabase.from("Post_Dislikes").insert([{ post_id: postId, user_id: currentUser.id }]);
@@ -200,6 +197,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   };
 
   const handleReplyLike = async (replyId: string) => {
+    await supabase.from("Reply_Dislikes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Likes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
@@ -207,6 +205,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   };
 
   const handleReplyDislike = async (replyId: string) => {
+    await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Reply_Dislikes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Dislikes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Dislikes").insert([{ reply_id: replyId, user_id: currentUser.id }]);

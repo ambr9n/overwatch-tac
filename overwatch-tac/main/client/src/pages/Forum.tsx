@@ -265,7 +265,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑️</button>}
+        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑</button>}
       </div>
     );
   };
@@ -365,7 +365,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         return (
           <div key={post.post_id} ref={index === posts.length - 1 ? lastElementRef : null} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={enrichedUser?.is_mod || enrichedUser?.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
-            <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd' }}>{post.text}</p></div>
+            <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd', margin: 0, overflowWrap: 'anywhere' }}>{post.text}</p></div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
               <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>

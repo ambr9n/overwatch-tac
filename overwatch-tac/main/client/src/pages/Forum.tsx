@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../Supabase';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 
-/**
- * CUSTOM MODAL COMPONENT
- */
 const CustomModal: React.FC<{
   isOpen: boolean;
   title: string;
@@ -72,7 +69,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   
-  // Logic Refs
   const observer = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const pageRef = useRef(0);
@@ -86,6 +82,27 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; type: 'post' | 'reply'; id: string | null }>({
     isOpen: false, type: 'post', id: null
   });
+
+  const navigate = useNavigate();
+  const [userSearch, setUserSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (userSearch.trim().length > 1) {
+        const { data } = await supabase
+          .from("Users")
+          .select("user_id, username, profile_image_link")
+          .ilike("username", `%${userSearch}%`)
+          .limit(5);
+        setSearchResults(data || []);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [userSearch]);
 
   const calculateAlgorithmicScore = (post: ForumPost) => {
     const likes = post.Post_Likes?.length || 0;
@@ -120,10 +137,12 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
           Reply_Likes (user_id),
           Reply_Dislikes (user_id)
         )
-      `)
-      .order("created_at", { ascending: false })
-      .range(from, to);
-      
+      `);
+
+    if (sortBy === 'newest' || activeTab === 'algorithmic') {
+      query = query.order("created_at", { ascending: false });
+    }
+
     if (activeTab === 'following' && currentUser) {
       const { data: followingData } = await supabase.from("User_Follows").select("following_id").eq("follower_id", currentUser.id);
       const followingIds = followingData?.map(f => f.following_id) || [];
@@ -133,7 +152,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
     const { data, error } = await query;
 
     if (!error && data) {
-      const processedData = (data as unknown as ForumPost[]).map(post => ({
+      let processedData = (data as unknown as ForumPost[]).map(post => ({
         ...post,
         score: calculateAlgorithmicScore(post)
       }));
@@ -142,14 +161,16 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         processedData.sort((a, b) => (b.score || 0) - (a.score || 0));
       } else if (sortBy === 'popular') {
         processedData.sort((a, b) => {
-          const scoreA = (a.Post_Likes?.length || 0) - (a.Post_Dislikes?.length || 0);
-          const scoreB = (b.Post_Likes?.length || 0) - (b.Post_Dislikes?.length || 0);
-          return scoreB - scoreA;
+          const likesA = a.Post_Likes?.length || 0;
+          const likesB = b.Post_Likes?.length || 0;
+          if (likesB !== likesA) return likesB - likesA;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
       }
 
-      setPosts(prev => reset ? processedData : [...prev, ...processedData]);
-      setHasMore(data.length === PAGE_SIZE);
+      const paginatedData = processedData.slice(from, to + 1);
+      setPosts(prev => reset ? paginatedData : [...prev, ...paginatedData]);
+      setHasMore(paginatedData.length === PAGE_SIZE);
       pageRef.current += 1;
     }
     
@@ -184,8 +205,8 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
 
   const getUserData = (userField: any) => Array.isArray(userField) ? userField[0] : userField;
 
-  // Interactions
   const handleLike = async (postId: string) => {
+    await supabase.from("Post_Dislikes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     else await supabase.from("Post_Likes").insert([{ post_id: postId, user_id: currentUser.id }]);
@@ -193,6 +214,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   };
 
   const handleDislike = async (postId: string) => {
+    await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Post_Dislikes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Dislikes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
     else await supabase.from("Post_Dislikes").insert([{ post_id: postId, user_id: currentUser.id }]);
@@ -200,6 +222,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   };
 
   const handleReplyLike = async (replyId: string) => {
+    await supabase.from("Reply_Dislikes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Reply_Likes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Likes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
@@ -207,6 +230,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   };
 
   const handleReplyDislike = async (replyId: string) => {
+    await supabase.from("Reply_Likes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     const { data: existing } = await supabase.from("Reply_Dislikes").select("*").eq("reply_id", replyId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Reply_Dislikes").delete().eq("reply_id", replyId).eq("user_id", currentUser.id);
     else await supabase.from("Reply_Dislikes").insert([{ reply_id: replyId, user_id: currentUser.id }]);
@@ -279,6 +303,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
 
   return (
     <div style={{ maxWidth: 850, margin: "80px auto 0 auto", padding: "20px", color: "white", background: '#000', minHeight: '100vh' }}>
+      
       <h2 style={{ marginBottom: 20 }}>Forum</h2>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, borderBottom: '1px solid #1a1a1a' }}>
@@ -299,9 +324,35 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         )}
       </div>
 
-      <div style={{ marginBottom: 30, display: "flex", gap: 10 }}>
+      <div style={{ marginBottom: 15, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
         <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts(true);}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#dd65fb", color: "white", cursor: "pointer", border: 'none' }}>Post</button>
+      </div>
+
+      <div style={{ position: 'relative', marginBottom: 30 }}>
+        <input 
+          type="text" 
+          value={userSearch} 
+          onChange={(e) => setUserSearch(e.target.value)} 
+          placeholder="Search for accounts..." 
+          style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "#111", border: "1px solid #282828", color: "white", boxSizing: 'border-box' }} 
+        />
+        {searchResults.length > 0 && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#161616", border: "1px solid #282828", borderRadius: "0 0 10px 10px", zIndex: 100, overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+            {searchResults.map(user => (
+              <div 
+                key={user.user_id} 
+                onClick={() => { navigate(`/profile/${user.user_id}`); setUserSearch(""); }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", cursor: "pointer", borderBottom: "1px solid #222" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#222")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <img src={user.profile_image_link || DEFAULT_AVATAR} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+                <span style={{ fontWeight: "bold", color: "white" }}>{user.username}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <CustomModal isOpen={deleteModal.isOpen} title="Delete?" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>Permanently delete this?</CustomModal>

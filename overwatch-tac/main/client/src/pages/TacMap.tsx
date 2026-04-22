@@ -134,7 +134,6 @@ const ToolButton: React.FC<ToolButtonProps> = ({ name, icon, activeTool, onClick
 const gameModes: GameMode[] = ["Hybrid", "Escort", "Control", "Push", "Flashpoint", "Clash", "Assault"];
 const roles = ["Damage", "Support", "Tank"];
 
-// SVG Icons
 const SelectIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 3 10 21 13 13 21 10 3 3"/></svg>);
 const PenIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>);
 const EraserIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>);
@@ -194,6 +193,7 @@ const TacMap: React.FC = () => {
 
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const internalMapRef = useRef<HTMLDivElement>(null);
 
   const allyMarkers = useMemo(() => markers.filter(m => m.team === "ally"), [markers]);
   const enemyMarkers = useMemo(() => markers.filter(m => m.team === "enemy"), [markers]);
@@ -393,16 +393,16 @@ const TacMap: React.FC = () => {
     } catch (err) { console.error("Load failed:", err); } finally { setLoading(false); }
   };
 
+  // CORRECTED COORDINATE LOGIC
   const getCoords = (e: React.MouseEvent | React.DragEvent) => {
-    const rect = mapRef.current?.getBoundingClientRect();
+    const rect = internalMapRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
-    const clientX = e.clientX - rect.left;
-    const clientY = e.clientY - rect.top;
-    const originX = rect.width / 2;
-    const originY = rect.height / 2;
-    const x = ((clientX - originX - pan.x) / zoom) + originX;
-    const y = ((clientY - originY - pan.y) / zoom) + originY;
-    return { x: (x / rect.width) * 1000, y: (y / rect.height) * 600 };
+    
+    // Position relative to the 1000x600 image container itself
+    const x = (e.clientX - rect.left) / rect.width * 1000;
+    const y = (e.clientY - rect.top) / rect.height * 600;
+    
+    return { x, y };
   };
 
   const finalizeSave = async () => {
@@ -676,10 +676,16 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {/* VIEWPORT */}
+      {/* VIEWPORT - UPDATED TO FIX SHIFTING */}
       <div 
-        ref={mapRef} onWheel={handleWheel} onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}
-        onClick={handleMapClick} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+        ref={mapRef} 
+        onWheel={handleWheel} 
+        onDragOver={(e) => e.preventDefault()} 
+        onDrop={handleDrop}
+        onClick={handleMapClick} 
+        onMouseDown={handleMouseDown} 
+        onMouseMove={handleMouseMove} 
+        onMouseUp={handleMouseUp}
         onContextMenu={(e) => e.preventDefault()}
         style={{ flex: 1, display: "flex", backgroundColor: "#000000", position: "relative", minWidth: 0, justifyContent: "center", alignItems: "center", overflow: "hidden", cursor: spacePressed || isPanning ? "grabbing" : selectedMap ? "default" : "not-allowed" }}
       >
@@ -690,41 +696,51 @@ const TacMap: React.FC = () => {
           {sidebarOpen ? "«" : "»"}
         </button>
 
-        <div style={{ 
-          width: "100%", height: "100%", position: "relative",
-          backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`,
-          backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center",
-          backgroundColor: "#000000", opacity: selectedMap ? 1 : 0.6,
-          aspectRatio: "1000 / 600", maxHeight: "100%", maxWidth: "100%", margin: "auto",
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: "center center", transition: isPanning ? "none" : "transform 0.05s ease-out",
-          pointerEvents: selectedMap ? "auto" : "none"
-        }}>
-          <canvas ref={canvasRef} width={1000} height={600} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 5, pointerEvents: "none" }} />
-          {markers.map(marker => (
-            <div
-              key={marker.id}
-              style={{
-                position: "absolute", left: `${(marker.x / 1000) * 100}%`, top: `${(marker.y / 600) * 100}%`,
-                width: "44px", height: "44px", borderRadius: "50%",
-                border: selectedElement?.id === marker.id ? "3px solid #f65dfb" : `2px solid ${marker.team === "ally" ? "#007bff" : "#dc3545"}`,
-                boxShadow: marker.team === "ally" ? "0 0 15px rgba(0, 123, 255, 0.5)" : "0 0 15px rgba(220, 53, 69, 0.5)",
-                backgroundImage: `url(${marker.iconUrl})`, backgroundSize: "cover", transform: "translate(-50%, -50%)",
-                zIndex: 10, cursor: activeTool === "select" ? "grab" : "default"
-              }}
-              onMouseDown={(e) => {
-                if (activeTool === "select") {
-                  e.stopPropagation(); setSelectedElement({ type: "marker", id: marker.id }); setIsDraggingElement(true);
-                }
-              }}
-            >
-              {marker.label && (
-                <div style={{ position: "absolute", bottom: "-18px", left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.7)", padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
-                  {marker.label}
-                </div>
-              )}
-            </div>
-          ))}
+        {/* INNER SCALING CONTAINER - This is what stops the drifting */}
+        <div 
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", transition: "all 0.3s ease-in-out"
+          }}
+        >
+          <div 
+            ref={internalMapRef}
+            style={{ 
+              width: "1000px", height: "600px", position: "relative",
+              backgroundImage: `url("${mapList.find(m => m.name === selectedMap)?.image_path}")`,
+              backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center",
+              backgroundColor: "#000000", opacity: selectedMap ? 1 : 0.6,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "center center", transition: isPanning ? "none" : "transform 0.05s ease-out",
+              pointerEvents: selectedMap ? "auto" : "none",
+              flexShrink: 0 // Crucial to prevent resizing of the logic box
+            }}
+          >
+            <canvas ref={canvasRef} width={1000} height={600} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 5, pointerEvents: "none" }} />
+            {markers.map(marker => (
+              <div
+                key={marker.id}
+                style={{
+                  position: "absolute", left: `${(marker.x / 1000) * 100}%`, top: `${(marker.y / 600) * 100}%`,
+                  width: "44px", height: "44px", borderRadius: "50%",
+                  border: selectedElement?.id === marker.id ? "3px solid #f65dfb" : `2px solid ${marker.team === "ally" ? "#007bff" : "#dc3545"}`,
+                  boxShadow: marker.team === "ally" ? "0 0 15px rgba(0, 123, 255, 0.5)" : "0 0 15px rgba(220, 53, 69, 0.5)",
+                  backgroundImage: `url(${marker.iconUrl})`, backgroundSize: "cover", transform: "translate(-50%, -50%)",
+                  zIndex: 10, cursor: activeTool === "select" ? "grab" : "default"
+                }}
+                onMouseDown={(e) => {
+                  if (activeTool === "select") {
+                    e.stopPropagation(); setSelectedElement({ type: "marker", id: marker.id }); setIsDraggingElement(true);
+                  }
+                }}
+              >
+                {marker.label && (
+                  <div style={{ position: "absolute", bottom: "-18px", left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.7)", padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                    {marker.label}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* TOOLBAR */}
@@ -789,32 +805,18 @@ const TacMap: React.FC = () => {
         <button onClick={() => setRightSidebarOpen(true)} style={{ position: "absolute", top: "20px", right: "10px", zIndex: 15, background: "rgba(23, 23, 23, 0.8)", border: "1px solid #333", color: "#f65dfb", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold" }}>📋</button>
       )}
 
-      {/* MAP SELECTOR - FIXED FOR OVERLAP */}
+      {/* MAP SELECTOR */}
       {isMapSelectorOpen && (
-        <div style={{ 
-            position: "fixed", 
-            top: "60px", // Starts below the 60px navbar
-            left: 0, 
-            width: "100vw", 
-            height: "calc(100vh - 60px)", // Fills remaining space
-            backgroundColor: "rgba(0, 0, 0, 0.94)", 
-            display: "flex", 
-            flexDirection: "column", 
-            zIndex: 2000, 
-            padding: "40px",
-            backdropFilter: "blur(8px)"
-        }}>
+        <div style={{ position: "fixed", top: "60px", left: 0, width: "100vw", height: "calc(100vh - 60px)", backgroundColor: "rgba(0, 0, 0, 0.94)", display: "flex", flexDirection: "column", zIndex: 2000, padding: "40px", backdropFilter: "blur(8px)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", maxWidth: "1200px", width: "100%", margin: "0 auto 30px auto" }}>
             <h2 style={{ fontSize: "32px", fontWeight: "800", background: "linear-gradient(45deg, #fff, #f65dfb)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Select a map</h2>
             <button onClick={() => setIsMapSelectorOpen(false)} style={{ background: "#333", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>Back to Map</button>
           </div>
-
           <div style={{ display: "flex", gap: "10px", marginBottom: "30px", justifyContent: "center", flexWrap: "wrap" }}>
             {gameModes.map(mode => (
               <button key={mode} onClick={() => setSelectedMode(mode)} style={{ padding: "12px 24px", background: selectedMode === mode ? "linear-gradient(45deg, #e60082, #f65dfb)" : "#1a1a1a", color: "white", border: selectedMode === mode ? "none" : "1px solid #333", borderRadius: "30px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}>{mode}</button>
             ))}
           </div>
-
           <div style={{ flex: 1, overflowY: "auto", maxWidth: "1200px", width: "100%", margin: "0 auto" }}>
             {selectedMode ? (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "25px", paddingBottom: "40px" }}>

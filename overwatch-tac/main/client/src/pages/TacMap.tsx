@@ -393,15 +393,11 @@ const TacMap: React.FC = () => {
     } catch (err) { console.error("Load failed:", err); } finally { setLoading(false); }
   };
 
-  // CORRECTED COORDINATE LOGIC
   const getCoords = (e: React.MouseEvent | React.DragEvent) => {
     const rect = internalMapRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
-    
-    // Position relative to the 1000x600 image container itself
     const x = (e.clientX - rect.left) / rect.width * 1000;
     const y = (e.clientY - rect.top) / rect.height * 600;
-    
     return { x, y };
   };
 
@@ -457,15 +453,12 @@ const TacMap: React.FC = () => {
     if (!assetData) return;
     const asset = JSON.parse(assetData);
     const coords = getCoords(e);
-
     const teamMarkers = activeTeam === "ally" ? allyMarkers : enemyMarkers;
     if (teamMarkers.length >= 5 || teamMarkers.some(m => m.heroName === asset.name)) return;
-
     const newMarker: Marker = {
       id: Date.now(), x: coords.x, y: coords.y,
       team: activeTeam, type: "asset", iconUrl: asset.image_path, heroName: asset.name
     };
-
     const nextMarkers = [...markers, newMarker];
     setMarkers(nextMarkers);
     pushToHistory(nextMarkers, drawings);
@@ -509,7 +502,6 @@ const TacMap: React.FC = () => {
   const handleMapClick = (e: React.MouseEvent) => {
     if (e.button === 2 || !selectedMap || spacePressed || isPanning) return;
     const { x, y } = getCoords(e);
-
     if (activeTool === "select") {
       const clickedMarker = markers.find(m => Math.sqrt((m.x - x)**2 + (m.y - y)**2) < 25);
       if (clickedMarker) { setSelectedElement({ type: "marker", id: clickedMarker.id }); return; }
@@ -517,7 +509,6 @@ const TacMap: React.FC = () => {
       if (clickedDrawing) { setSelectedElement({ type: "drawing", id: clickedDrawing.id }); return; }
       setSelectedElement(null);
     }
-
     if (activeTool === "eraser") {
       const lineToErase = drawings.find(d => isPointNearLine(x, y, d));
       if (lineToErase) {
@@ -533,7 +524,6 @@ const TacMap: React.FC = () => {
       e.preventDefault(); setIsPanning(true); return;
     }
     const { x, y } = getCoords(e);
-
     if (activeTool === "pen") {
       setIsDrawing(true);
       const newLine: DrawingLine = {
@@ -543,7 +533,6 @@ const TacMap: React.FC = () => {
       setDrawings(prev => [...prev, newLine]);
       return;
     }
-
     if (activeTool === "select") {
       const clickedMarker = markers.find(m => Math.sqrt((m.x - x)**2 + (m.y - y)**2) < 25);
       if (clickedMarker) {
@@ -564,7 +553,6 @@ const TacMap: React.FC = () => {
     if (!selectedMap) return;
     const { x, y } = getCoords(e);
     setMousePos({ x, y }); 
-
     if (isPanning) {
       setPan(prev => ({ x: prev.x + e.movementX, y: prev.y + e.movementY }));
       return;
@@ -618,7 +606,7 @@ const TacMap: React.FC = () => {
         width: sidebarOpen ? "350px" : "0px", background: "#161616", 
         borderRight: sidebarOpen ? "1px solid #282828" : "none", display: "flex", 
         flexDirection: "column", padding: sidebarOpen ? "20px" : "0px", overflowY: "auto",
-        transition: "width 0.3s ease, padding 0.3s ease", flexShrink: 0
+        transition: "width 0.3s ease", flexShrink: 0
       }}>
         <div style={{ minWidth: "310px" }}>
           <div style={{ fontSize: "20px", marginBottom: "20px", fontWeight: "bold" }}>
@@ -676,7 +664,7 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {/* VIEWPORT - UPDATED TO FIX SHIFTING */}
+      {/* VIEWPORT */}
       <div 
         ref={mapRef} 
         onWheel={handleWheel} 
@@ -689,14 +677,45 @@ const TacMap: React.FC = () => {
         onContextMenu={(e) => e.preventDefault()}
         style={{ flex: 1, display: "flex", backgroundColor: "#000000", position: "relative", minWidth: 0, justifyContent: "center", alignItems: "center", overflow: "hidden", cursor: spacePressed || isPanning ? "grabbing" : selectedMap ? "default" : "not-allowed" }}
       >
+        {/* LEFT TOGGLE */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{ position: "absolute", top: "20px", left: "10px", zIndex: 15, background: "rgba(230, 0, 130, 0.8)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(0,0,0,0.3)" }}
+          style={{ position: "absolute", top: "20px", left: "10px", zIndex: 15, background: "linear-gradient(45deg, #e60082, #f65dfb)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(230, 0, 130, 0.3)" }}
         >
           {sidebarOpen ? "«" : "»"}
         </button>
 
-        {/* INNER SCALING CONTAINER - This is what stops the drifting */}
+        {/* TOP RIGHT UI STACK (Toggle + Zoom) */}
+        <div style={{ 
+          position: "absolute", top: "20px", right: "10px", zIndex: 15, 
+          display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" 
+        }}>
+          {!rightSidebarOpen && (
+            <button
+              onClick={() => setRightSidebarOpen(true)}
+              style={{ 
+                background: "linear-gradient(45deg, #e60082, #f65dfb)", 
+                border: "none", color: "white", borderRadius: "4px", 
+                width: "36px", height: "36px", cursor: "pointer", 
+                fontWeight: "bold", fontSize: "18px", display: "flex", 
+                alignItems: "center", justifyContent: "center", 
+                boxShadow: "0 4px 10px rgba(230, 0, 130, 0.3)" 
+              }}
+            >
+              «
+            </button>
+          )}
+
+          <div style={{ 
+            background: "rgba(0,0,0,0.7)", padding: "6px 10px", borderRadius: "6px", 
+            fontSize: "12px", fontWeight: "bold", color: "#aaa", 
+            border: "1px solid #333", backdropFilter: "blur(4px)" 
+          }}>
+            {Math.round(zoom * 100)}%
+          </div>
+        </div>
+
+        {/* INNER SCALING CONTAINER */}
         <div 
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", transition: "all 0.3s ease-in-out"
@@ -712,7 +731,7 @@ const TacMap: React.FC = () => {
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: "center center", transition: isPanning ? "none" : "transform 0.05s ease-out",
               pointerEvents: selectedMap ? "auto" : "none",
-              flexShrink: 0 // Crucial to prevent resizing of the logic box
+              flexShrink: 0
             }}
           >
             <canvas ref={canvasRef} width={1000} height={600} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 5, pointerEvents: "none" }} />
@@ -761,10 +780,6 @@ const TacMap: React.FC = () => {
              <input type="range" min="1" max="20" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} onMouseDown={() => setIsSlidingBrush(true)} onMouseUp={() => setIsSlidingBrush(false)} style={{ cursor: "pointer", accentColor: "#f65dfb" }} />
           </div>
         )}
-
-        <div style={{ position: "absolute", top: "20px", right: "20px", background: "rgba(0,0,0,0.6)", padding: "8px 12px", borderRadius: "6px", fontSize: "14px", fontWeight: "bold", color: "#aaa", zIndex: 10 }}>
-          {Math.round(zoom * 100)}%
-        </div>
       </div>
 
       {/* RIGHT SIDEBAR */}
@@ -772,7 +787,12 @@ const TacMap: React.FC = () => {
         <div style={{ padding: "20px", minWidth: "320px", height: "100%", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h3 style={{ fontSize: "18px", color: "#f65dfb", margin: 0 }}>Team Overview</h3>
-            <button onClick={() => setRightSidebarOpen(false)} style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "18px" }}>×</button>
+            <button 
+              onClick={() => setRightSidebarOpen(false)} 
+              style={{ background: "rgba(230, 0, 130, 0.1)", border: "1px solid #e60082", color: "#f65dfb", borderRadius: "4px", width: "28px", height: "28px", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              »
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: "auto" }}>
              <div style={{ marginBottom: "25px" }}>
@@ -801,11 +821,7 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {!rightSidebarOpen && (
-        <button onClick={() => setRightSidebarOpen(true)} style={{ position: "absolute", top: "20px", right: "10px", zIndex: 15, background: "rgba(23, 23, 23, 0.8)", border: "1px solid #333", color: "#f65dfb", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold" }}>📋</button>
-      )}
-
-      {/* MAP SELECTOR */}
+      {/* MAP SELECTOR & MODALS */}
       {isMapSelectorOpen && (
         <div style={{ position: "fixed", top: "60px", left: 0, width: "100vw", height: "calc(100vh - 60px)", backgroundColor: "rgba(0, 0, 0, 0.94)", display: "flex", flexDirection: "column", zIndex: 2000, padding: "40px", backdropFilter: "blur(8px)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", maxWidth: "1200px", width: "100%", margin: "0 auto 30px auto" }}>
@@ -839,7 +855,6 @@ const TacMap: React.FC = () => {
         </div>
       )}
 
-      {/* MODALS */}
       <CustomModal isOpen={isDuplicateNameModalOpen} title="Name Taken" onConfirm={() => setIsDuplicateNameModalOpen(false)} showCancel={false}>
         <p style={{ color: "#aaa" }}>Strategy named "<strong>{newStrategyName}</strong>" already exists.</p>
       </CustomModal>

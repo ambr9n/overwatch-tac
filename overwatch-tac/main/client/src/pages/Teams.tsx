@@ -58,15 +58,25 @@ export default function Teams() {
 
   const [invites, setInvites] = useState<any[]>([]); 
   const [visibility, setVisibility] = useState<"public" | "invite_only" | "closed">("public");
+  const getVisibilityLabel = (visibility: string) => {
+    if (visibility === 'invite_only') return 'Invite Only';
+    return visibility.charAt(0).toUpperCase() + visibility.slice(1);
+  };
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+  const [pendingRevoke, setPendingRevoke] = useState<{ show: boolean; userId: string; username: string }>({ 
+    show: false, 
+    userId: "", 
+    username: "" 
+  });
 
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
   const [teamIcon, setTeamIcon] = useState("");
-  
-  const [userSaves, setUserSaves] = useState<any[]>([]);
+
+  const [myAvailableSaves, setMyAvailableSaves] = useState<any[]>([]);
   const [isSharingSave, setIsSharingSave] = useState(false);
   const [selectedSaveToShare, setSelectedSaveToShare] = useState<string>("");
 
@@ -115,6 +125,29 @@ export default function Teams() {
     init();
   }, []);
 
+  useEffect(() => {
+    if (selectedTeam) {
+      setTeamName(selectedTeam.name || "");
+      setTeamDesc(selectedTeam.description || "");
+      setTeamIcon(selectedTeam.profile_image_link || "");
+      setVisibility(selectedTeam.visibility || "public");
+    }
+  }, [selectedTeam]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setUserSearchResults([]);
+        setUserSearchQuery("");
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   const fetchTeams = useCallback(async (reset = false) => {
     if (isFetchingRef.current || !currentUser) return;
     isFetchingRef.current = true;
@@ -139,21 +172,55 @@ export default function Teams() {
       setHasMore(false);
     } else if (activeTab === "my_teams") {
       const { data: membershipData } = await supabase.from("User_Teams")
-        .select("team_id").eq("user_id", currentUser.id).eq("status", "accepted");
+        .select("team_id")
+        .eq("user_id", currentUser.id)
+        .eq("status", "accepted");
+      
       const teamIds = membershipData?.map(m => m.team_id) || [];
-      if (teamIds.length === 0) { setTeams([]); setHasMore(false); }
-      else {
-        const { data } = await supabase.from("Teams").select(`*, User_Teams(user_id, role, Users(username))`).in("team_id", teamIds);
-        setTeams(data?.map(t => ({ ...t, is_member: true })) || []);
+      
+      if (teamIds.length === 0) { 
+        setTeams([]); 
+        setHasMore(false); 
+      } else {
+        const { data } = await supabase.from("Teams")
+          .select(`*, User_Teams(count)`)
+          .in("team_id", teamIds);
+        
+        setTeams(data?.map(t => ({ 
+          ...t, 
+          is_member: true,
+          member_count: t.User_Teams?.[0]?.count || 0
+        })) || []);
         setHasMore(false);
       }
     } else {
-      let query = supabase.from("Teams").select(`*, User_Teams(user_id, role, Users(username))`).range(from, to).order('name');
-      if (searchQuery.trim()) query = query.ilike('name', `%${searchQuery.trim()}%`);
+      let query = supabase.from("Teams")
+        .select(`
+          *, 
+          User_Teams(count),
+          membership:User_Teams(user_id) 
+        `)
+        .range(from, to)
+        .order('name');
+
+        if (searchQuery.trim()) {
+          query = query.ilike('name', `%${searchQuery}%`);
+        }
+
       const { data } = await query;
       if (data) {
-        const processed = data.map(t => ({ ...t, is_member: t.User_Teams?.some((m:any) => m.user_id === currentUser.id) }));
+        const processed = data.map(t => {
+          const isMember = t.membership?.some((m: any) => m.user_id === currentUser.id);
+          
+          return { 
+            ...t, 
+            is_member: isMember,
+            member_count: t.User_Teams?.[0]?.count || 0 
+          };
+        });
+
         const discoverable = processed.filter(t => !t.is_member && t.visibility !== 'closed');
+        
         setTeams(prev => reset ? discoverable : [...prev, ...discoverable]);
         setHasMore(data.length === PAGE_SIZE);
         pageRef.current += 1;
@@ -162,6 +229,79 @@ export default function Teams() {
     setLoading(false);
     isFetchingRef.current = false;
   }, [activeTab, currentUser, searchQuery]);
+
+  const handleKickMember = async (targetUserId: string) => {
+    if (!selectedTeam) return;
+
+    const { error } = await supabase
+      .from("User_Teams")
+      .delete()
+      .eq("team_id", selectedTeam.team_id)
+      .eq("user_id", targetUserId);
+
+    if (error) {
+      console.error("Error updating role:", error.message);
+      setIsErrorModalOpen({ show: true, msg: "Failed to update member role." });
+    } else {
+      fetchTeamData(selectedTeam); 
+    }
+  };
+
+  const searchUsers = async (query: string) => {
+    setUserSearchQuery(query);
+    
+    if (query.trim().length < 1) {
+      setUserSearchResults([]);
+      return;
+    }
+
+    const { data: members } = await supabase
+      .from("User_Teams")
+      .select("user_id")
+      .eq("team_id", selectedTeam.team_id);
+
+    const existingIds = members?.map(m => m.user_id) || [];
+    const pendingIds = (pendingInvites || []).map(p => p.user_id);
+    const excludeIds = [...existingIds, ...pendingIds];
+
+    const { data: searchData } = await supabase
+      .from("Users")
+      .select("user_id, username")
+      .ilike("username", `%${query}%`)
+      .not("user_id", "in", `(${excludeIds.length > 0 ? excludeIds.join(',') : '00000000-0000-0000-0000-000000000000'})`)
+      .limit(5);
+
+    setUserSearchResults(searchData || []);
+  };
+
+  const handleSendInvite = async (targetUserId: string) => {
+    const { error } = await supabase
+      .from("User_Teams")
+      .insert([{ 
+        team_id: selectedTeam.team_id, 
+        user_id: targetUserId, 
+        role: 'member', 
+        status: 'pending' 
+      }]);
+
+    if (!error) {
+      setIsSuccess({ show: true, msg: "Invite sent!" });
+      setUserSearchQuery("");
+      setUserSearchResults([]);
+      fetchTeamData(selectedTeam); 
+    }
+  };
+
+  const handleCancelInvite = async (targetUserId: string) => {
+    await supabase
+      .from("User_Teams")
+      .delete()
+      .eq("team_id", selectedTeam.team_id)
+      .eq("user_id", targetUserId)
+      .eq("status", "pending");
+
+    fetchTeamData(selectedTeam);
+  };
 
   const handleAcceptInvite = async (teamId: string) => {
     const { error } = await supabase.from("User_Teams")
@@ -198,26 +338,50 @@ export default function Teams() {
     if (currentUser && !selectedTeam) fetchTeams(true); 
   }, [activeTab, currentUser, selectedTeam, searchQuery, fetchTeams]);
 
-  const fetchUserSaves = async () => {
-    if (!currentUser) return;
-    const { data } = await supabase.from("Saved_Maps").select("save_id, name, description").eq("user_id", currentUser.id);
-    setUserSaves(data || []);
-  };
+  const fetchMySaves = useCallback(async () => {
+    if (!currentUser?.id) return;
+    
+    const { data, error } = await supabase
+      .from("Saved_Maps")
+      .select(`save_id, name, description, Maps(name)`)
+      .eq("user_id", currentUser.id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+    setMyAvailableSaves(data || []);
+  }, [currentUser]);
 
   const fetchTeamData = async (team: any) => {
     if (!team?.team_id || !currentUser) return;
     
-    const [{ data: freshTeam }, { data: members }, { data: saves }] = await Promise.all([
-      supabase.from("Teams").select(`team_id, name, description, profile_image_link, visibility`).eq("team_id", team.team_id).single(),
-      supabase.from("User_Teams").select(`user_id, role, Users(username)`).eq("team_id", team.team_id).eq("status", "accepted"),
-      supabase.from("Team_Saves").select(`save_id, owner_id, is_pinned, folder_name, Saved_Maps(save_id, name, description, Maps(name)), Users(username)`).eq("team_id", team.team_id)
+    const [{ data: freshTeam }, { data: allMembersData }, { data: saves }, { data: myPrivateSaves } ] = await Promise.all([
+      supabase.from("Teams")
+        .select(`team_id, name, description, profile_image_link, visibility`)
+        .eq("team_id", team.team_id)
+        .single(),
+      supabase.from("User_Teams")
+        .select(`user_id, role, status, Users(username)`) 
+        .eq("team_id", team.team_id),
+      supabase.from("Team_Saves")
+        .select(`save_id, owner_id, is_pinned, folder_name, Saved_Maps(save_id, name, description, Maps(name)), Users(username)`)
+        .eq("team_id", team.team_id),
+      supabase.from("Saved_Maps")
+        .select(`save_id, name, description, Maps(name)`)
+        .eq("user_id", currentUser.id)
     ]);
 
-    const teamMembersList = members || [];
-    setTeamMembers(teamMembersList);
+    const membersArray = (allMembersData as any[]) || [];
+    
+    const acceptedMembers = membersArray.filter(m => m.status === 'accepted');
+    const pendingInvitesList = membersArray.filter(m => m.status === 'pending');
 
-    const myEntry = teamMembersList.find(m => m.user_id === currentUser.id);
-    const ownerEntry = teamMembersList.find(m => m.role === 'owner');
+    setTeamMembers(acceptedMembers);
+    setPendingInvites(pendingInvitesList);
+
+    const myEntry = acceptedMembers.find(m => m.user_id === currentUser.id);
+    const ownerEntry = acceptedMembers.find(m => m.role === 'owner');
 
     const processedSaves = (saves || []).map((s: any) => ({
       id: s.save_id,
@@ -230,8 +394,10 @@ export default function Teams() {
     }));
     
     setTeamSaves(processedSaves);
+    
     setSelectedTeam({ 
-      ...freshTeam, 
+      ...team,
+      ...freshTeam,
       is_member: !!myEntry,
       user_role: myEntry?.role || null,
       owner_name: extractUsername(ownerEntry)
@@ -265,7 +431,7 @@ export default function Teams() {
     if (!selectedSaveToShare || !selectedTeam || !currentUser) return;
     const { data: existing } = await supabase.from("Team_Saves").select("save_id").eq("team_id", selectedTeam.team_id).eq("save_id", selectedSaveToShare);
     if (existing && existing.length > 0) { setDuplicateSave(true); return; }
-    const { error } = await supabase.from("Team_Saves").insert([{ team_id: selectedTeam.team_id, save_id: selectedSaveToShare, owner_id: currentUser.id }]);
+    const { error } = await supabase.from("Team_Saves").insert([{ team_id: selectedTeam.team_id, save_id: selectedSaveToShare, owner_id: currentUser.id, is_pinned: false }]);
     if (!error) {
       setIsSharingSave(false); setSelectedSaveToShare("");
       setIsSuccess({ show: true, msg: "Save shared with the team!" });
@@ -287,16 +453,29 @@ export default function Teams() {
       return;
     }
 
-    if (selectedTeam.user_role !== 'owner' && selectedTeam.user_role !== 'manager') {
-      alert("Only owners and managers can create folders.");
-      return;
-    }
+    const isAlreadyShared = teamSaves.find(s => s.id === folderTargetSave);
 
-    const { error } = await supabase
-      .from("Team_Saves")
-      .update({ folder_name: newFolderName.trim() })
-      .eq("save_id", folderTargetSave)
-      .eq("team_id", selectedTeam.team_id);
+    let error;
+
+    if (isAlreadyShared) {
+      const { error: updateError } = await supabase
+        .from("Team_Saves")
+        .update({ folder_name: newFolderName.trim() })
+        .eq("save_id", folderTargetSave)
+        .eq("team_id", selectedTeam.team_id);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from("Team_Saves")
+        .insert([{
+          team_id: selectedTeam.team_id,
+          save_id: folderTargetSave,
+          owner_id: currentUser.id,
+          folder_name: newFolderName.trim(),
+          is_pinned: false
+        }]);
+      error = insertError;
+    }
 
     if (!error) {
       setIsCreatingFolder(false);
@@ -400,51 +579,64 @@ export default function Teams() {
         description: teamDesc, 
         profile_image_link: teamIcon.trim() || null,
         visibility: visibility
-      })
-      .eq("team_id", selectedTeam.team_id);
+      }).eq("team_id", selectedTeam.team_id);
+
+      if (!error && (visibility === 'public' || visibility === 'closed')) {
+        await supabase
+          .from("User_Teams")
+          .delete()
+          .eq("team_id", selectedTeam.team_id)
+          .eq("status", "pending");
+      }
 
     if (!error) {
       setIsSettingsOpen(false);
       const updatedTeam = { ...selectedTeam, name: teamName, description: teamDesc, profile_image_link: teamIcon, visibility: visibility };
       setSelectedTeam(updatedTeam);
       setTeams(prevTeams => prevTeams.map(t => t.team_id === selectedTeam.team_id ? { ...t, ...updatedTeam } : t));
+      await fetchTeamData(updatedTeam);
       setIsSuccess({ show: true, msg: "Team updated successfully!" });
     }
   };
 
   const handleCreateTeam = async () => {
-    if (teamName.length > LIMITS.name) {
-      setIsErrorModalOpen({ show: true, msg: `The team name is too long (Max ${LIMITS.name} chars).` });
-      return;
-    }
-    if (teamDesc.length > LIMITS.desc) {
-      setIsErrorModalOpen({ show: true, msg: `The description is too long (Max ${LIMITS.desc} chars).` });
-      return;
-    }
-    if (!teamName.trim() || !currentUser) {
-      setIsErrorModalOpen({ show: true, msg: "Please enter a team name to continue." });
-      return;
+    if (!teamName.trim() || !currentUser) return;
+    
+    const { data: newTeam, error: teamError } = await supabase
+      .from("Teams")
+      .insert([{ 
+        name: teamName.trim(), 
+        description: teamDesc, 
+        profile_image_link: teamIcon.trim() || null,
+        visibility: visibility 
+      }])
+      .select()
+      .single();
+
+    if (teamError) { 
+      if (teamError.code === '23505') setNameConflict({ show: true, name: teamName.trim() }); 
+      return; 
     }
 
-    if (teamIcon.trim()) {
-      try {
-        const response = await fetch(teamIcon, { method: 'HEAD' });
-        if (!response.ok) throw new Error('Image URL is invalid.');
-      } catch (e) {
-        setTeamIcon("");
-        setIsErrorModalOpen({ show: true, msg: "The profile image URL is invalid. It has been cleared." });
-        return; 
-      }
-    }
-
-    const { data: newTeam, error: teamError } = await supabase.from("Teams").insert([{ name: teamName.trim(), description: teamDesc, profile_image_link: teamIcon.trim() || null }]).select().single();
-    if (teamError) { if (teamError.code === '23505') setNameConflict({ show: true, name: teamName.trim() }); return; }
     if (newTeam) {
-      const { error: memberError } = await supabase.from("User_Teams").insert([{ team_id: newTeam.team_id, user_id: currentUser.id, role: 'owner', status: 'accepted' }]);
+      const { error: memberError } = await supabase
+        .from("User_Teams")
+        .insert([{ 
+          team_id: newTeam.team_id, 
+          user_id: currentUser.id, 
+          role: 'owner', 
+          status: 'accepted' 
+        }]);
+
       if (!memberError) {
-        setIsCreating(false); setTeamName(""); setTeamDesc(""); setTeamIcon("");
-        setIsSuccess({ show: true, msg: `Team "${newTeam.name}" created successfully!` });
-        fetchTeams(true);
+        setIsCreating(false);
+        setTeamName("");
+        setTeamDesc("");
+        setTeamIcon("");
+        
+        await fetchTeams(true);
+        
+        setIsSuccess({ show: true, msg: `Team created!` });
       }
     }
   };
@@ -524,7 +716,7 @@ export default function Teams() {
                 <h1 onClick={() => setActiveTab("discover")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "discover" ? "white" : "#333" }}>Discover</h1>
                 <h1 onClick={() => setActiveTab("invites")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "invites" ? "white" : "#333" }}>Invites</h1>
               </div>
-              <button onClick={() => { setTeamName(""); setTeamDesc(""); setTeamIcon(""); setVisibility(selectedTeam.visibility || "public"); setIsCreating(true); }} style={{ background: "#f65dfb", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>+ Create Team</button>
+              <button onClick={() => { setTeamName(""); setTeamDesc(""); setTeamIcon(""); setVisibility("public"); setIsCreating(true); }} style={{ background: "#f65dfb", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>+ Create Team</button>
             </>
             ) : (
               <div style={{ width: '100%', textAlign: 'center', padding: '40px 0' }}>
@@ -558,6 +750,19 @@ export default function Teams() {
                     <h3 style={{ margin: 0, color: '#f65dfb' }}>{team.name}</h3>
                     <p style={{ color: '#666', fontSize: 13, margin: '4px 0' }}>{team.description || "No description."}</p>
                   </div>
+                  <span style={{ 
+                    marginLeft: 10, 
+                    fontSize: 10, 
+                    color: '#666', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: '0.5px',
+                    border: '1px solid #333',
+                    padding: '2px 6px',
+                    borderRadius: 4
+                  }}>
+                    {getVisibilityLabel(team.visibility)}
+                  </span>
+
                   <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 10, color: '#444', fontWeight: 800 }}>{team.member_count || 0} MEMBERS</div>
                   </div>
@@ -565,12 +770,22 @@ export default function Teams() {
               ))
             )}
             {loading && <p style={{ textAlign: 'center', color: '#666' }}>Loading...</p>}
-            {!loading && (activeTab === "invites" ? invites.length === 0 : teams.length === 0) && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>Nothing here yet.</p>}
+            {!loading && (activeTab === "invites" ? invites.length === 0 : teams.length === 0) && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>No teams found.</p>}
           </div>
         </div>
       ) : (
         <div>
-          <div style={{ width: "100%", background: "linear-gradient(to bottom, #111, #000)", borderBottom: "1px solid #222", padding: "100px 0 50px 0" }}>
+          <div style={{ 
+            width: "100vw", 
+            position: "relative",
+            left: "50%",
+            right: "50%",
+            marginLeft: "-50vw",
+            marginRight: "-50vw",
+            background: "linear-gradient(to bottom, #111, #000)", 
+            borderBottom: "1px solid #222", 
+            padding: "100px 0 50px 0" 
+          }}>
             <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 40px" }}>
               <button onClick={() => { setSelectedTeam(null); setViewingFolder(null); }} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', marginBottom: 20, fontWeight: 700 }}>← BACK</button>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -582,17 +797,63 @@ export default function Teams() {
                     <p style={{ color: '#888', fontSize: 14 }}>Owned by <span style={{ color: '#f65dfb' }}>{selectedTeam.owner_name}</span></p>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: "center" }}>
+                  {(selectedTeam.user_role === 'owner' || selectedTeam.user_role === 'manager') && 
+                    (selectedTeam.visibility === 'invite_only') && (
+                      <div 
+                        ref={searchContainerRef}
+                        style={{ position: 'relative' }}>
+                        <input 
+                          type="text"
+                          placeholder="🔍 Invite users..."
+                          value={userSearchQuery}
+                          onChange={(e) => searchUsers(e.target.value)}
+                          style={{ ...inputStyle, width: '180px', marginBottom: 0, padding: '10px' }}
+                        />
+                        {userSearchResults.length > 0 && (
+                          <div style={{ 
+                            position: 'absolute', 
+                            top: '100%', 
+                            left: 0, 
+                            width: '220px', 
+                            background: '#0a0a0a', 
+                            border: '2px solid #333', 
+                            borderRadius: 8, 
+                            zIndex: 9999, 
+                            marginTop: 10,
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
+                            overflow: 'hidden'
+                          }}>
+                            {userSearchResults.map(user => (
+                              <div 
+                                key={user.user_id}
+                                onClick={() => {
+                                  handleSendInvite(user.user_id);
+                                  setUserSearchResults([]);
+                                  setUserSearchQuery("");
+                                }}
+                                style={{ padding: '12px 15px', cursor: 'pointer', borderBottom: '1px solid #1a1a1a', fontSize: 13, color: '#eee' }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#111'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                              >
+                                + <span style={{ color: '#f65dfb', fontWeight: 'bold' }}>{user.username}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   <button onClick={() => setIsViewingMembers(true)} style={{ background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '10px 18px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Members</button>
                   {!selectedTeam.is_member ? (
                     selectedTeam.visibility === 'invite_only' ? (
                       <div style={{ 
+                        font: 'global',
                         background: '#3e163f', 
                         color: 'white', 
-                        border: 'none', 
-                        padding: '10px 24px', 
+                        border: '1px solid #333',
+                        padding: '7px 16px', 
                         borderRadius: 8, 
-                        fontWeight: 700, 
+                        fontWeight: 600, 
                         cursor: 'not-allowed',
                         display: 'flex',
                         alignItems: 'center'
@@ -626,9 +887,19 @@ export default function Teams() {
                 </h2>
                 <div style={{ display: 'flex', gap: 10 }}>
                   {(selectedTeam.user_role === 'owner' || selectedTeam.user_role === 'manager') && (
-                    <button onClick={() => setIsCreatingFolder(true)} style={{ background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px 24px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}>+ New Folder</button>
+                    <button 
+                      onClick={() => {
+                        fetchMySaves();
+                        setIsCreatingFolder(true);
+                      }}
+                    style={{ background: '#1a1a1a', border: '1px solid #333', color: 'white', padding: '12px 24px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}>+ New Folder</button>
                   )}
-                  <button onClick={() => { fetchUserSaves(); setIsSharingSave(true); }} style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}>+ Share Strategy</button>
+                  <button 
+                    onClick={() => {
+                      fetchMySaves();
+                      setIsSharingSave(true);
+                    }}
+                    style={{ background: '#f65dfb', color: 'white', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}>+ Share Strategy</button>
                 </div>
               </div>
               
@@ -676,13 +947,46 @@ export default function Teams() {
       )}
 
       {isCreatingFolder && (
-        <ModalShell title="Create New Folder" onClose={() => setIsCreatingFolder(false)} onConfirm={handleCreateFolder} confirmText="Initialize Folder" globalFont={globalFont}>
+        <ModalShell 
+          title="Create New Folder" 
+          onClose={() => setIsCreatingFolder(false)} 
+          onConfirm={handleCreateFolder} 
+          confirmText="Initialize Folder" 
+          globalFont={globalFont}
+        >
           <label style={labelStyle}>Folder Name (Max 30)</label>
-          <input type="text" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="e.g. Scrim Practice" style={inputStyle} />
+          <input 
+            type="text" 
+            value={newFolderName} 
+            onChange={e => setNewFolderName(e.target.value)} 
+            placeholder="e.g. Scrim Practice" 
+            style={inputStyle} 
+          />
+
           <label style={labelStyle}>Move a strategy to start folder</label>
-          <select value={folderTargetSave} onChange={e => setFolderTargetSave(e.target.value)} style={inputStyle}>
+          <select 
+            value={folderTargetSave} 
+            onChange={e => setFolderTargetSave(e.target.value)} 
+            style={inputStyle}
+          >
             <option value="">-- Choose Strategy --</option>
-            {teamSaves.map(s => <option key={s.id} value={s.id}>{s.map_name}</option>)}
+            
+            <optgroup label="Shared with Team">
+              {teamSaves.filter(s => !s.folder).map((save: any) => (
+                <option key={save.id} value={save.id}>
+                  {save.map_name} (Shared)
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Your Private Saves">
+              {myAvailableSaves
+                .filter(ms => !teamSaves.some(ts => ts.id === ms.save_id))
+                .map((save: any) => (
+                  <option key={save.save_id} value={save.save_id}>
+                    {save.name}
+                  </option>
+              ))}
+            </optgroup>
           </select>
         </ModalShell>
       )}
@@ -714,11 +1018,25 @@ export default function Teams() {
       )}
 
       {isSharingSave && (
-        <ModalShell title="Share Strategy" onClose={() => setIsSharingSave(false)} onConfirm={handleShareSave} confirmText="Share with Team" globalFont={globalFont}>
+        <ModalShell 
+          title="Share Strategy" 
+          onClose={() => setIsSharingSave(false)} 
+          onConfirm={handleShareSave} 
+          confirmText="Share with Team" 
+          globalFont={globalFont}
+        >
           <label style={labelStyle}>Select from your saves</label>
-          <select value={selectedSaveToShare} onChange={(e) => setSelectedSaveToShare(e.target.value)} style={{ ...inputStyle }}>
+          <select 
+            value={selectedSaveToShare} 
+            onChange={(e) => setSelectedSaveToShare(e.target.value)} 
+            style={{ ...inputStyle }}
+          >
             <option value="">-- Select Save --</option>
-            {userSaves.map(s => <option key={s.save_id} value={s.save_id}>{s.name}</option>)}
+            {myAvailableSaves.map((s: any) => (
+              <option key={s.save_id} value={s.save_id}>
+                {s.name}
+              </option>
+            ))}
           </select>
         </ModalShell>
       )}
@@ -729,29 +1047,64 @@ export default function Teams() {
       {isLeaving && <ModalShell title="Leave Team?" onClose={() => setIsLeaving(false)} onConfirm={confirmLeaveTeam} confirmText="Leave" isDelete={true} globalFont={globalFont}><p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>Are you sure you want to leave <b>{selectedTeam.name}</b>?</p></ModalShell>}
 
       {isViewingMembers && (
-        <ModalShell title="Members" onClose={() => setIsViewingMembers(false)} showButtons={false} globalFont={globalFont}>
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-            {teamMembers.map((m) => {
-               const memberUsername = extractUsername(m);
-               const isTargetOwner = m.role === 'owner';
-               const isTargetManager = m.role === 'manager';
-               const canIKick = (selectedTeam.user_role === 'owner' && m.user_id !== currentUser.id) || (selectedTeam.user_role === 'manager' && !isTargetOwner && !isTargetManager);
-               return (
-                <div key={m.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 10px', borderBottom: '1px solid #222' }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>{memberUsername}</div>
-                    <div style={{ color: isTargetOwner ? '#f65dfb' : '#666', fontSize: 10, fontWeight: 800 }}>{m.role?.toUpperCase()}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {selectedTeam.user_role === 'owner' && !isTargetOwner && (
-                      <button onClick={() => setPendingMemberAction({ show: true, userId: m.user_id, username: memberUsername, action: isTargetManager ? 'demote' : 'promote' })} style={{ background: '#222', border: '1px solid #333', color: '#f65dfb', fontSize: 10, padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}>{isTargetManager ? 'DEMOTE' : 'PROMOTE'}</button>
-                    )}
-                    {canIKick && <button onClick={() => setPendingMemberAction({ show: true, userId: m.user_id, username: memberUsername, action: 'kick' })} style={{ background: '#331111', border: 'none', color: '#ff4d4d', fontSize: 10, padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}>KICK</button>}
-                  </div>
+        <ModalShell title="Team Members" onClose={() => setIsViewingMembers(false)} showButtons={false} globalFont={globalFont}>
+          {teamMembers.map((member: any) => {
+            const isOwner = selectedTeam.user_role === 'owner';
+            const isManager = selectedTeam.user_role === 'manager';
+            const isSelf = member.user_id === currentUser?.id;
+            
+            const canKick = !isSelf && (isOwner || (isManager && member.role === 'member'));
+
+            return (
+              <div key={member.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #222' }}>
+                <div>
+                  <span style={{ color: '#eee', fontWeight: 600 }}>{member.Users?.username}</span>
+                  <span style={{ color: '#888', fontSize: 11, marginLeft: 10 }}>{member.role.toUpperCase()}</span>
                 </div>
-               );
-            })}
-          </div>
+
+                {canKick && (
+                  <button 
+                    onClick={() => setPendingMemberAction({ 
+                      show: true, 
+                      userId: member.user_id, 
+                      username: member.Users?.username || "this user", 
+                      action: 'kick' 
+                    })}
+                    style={{ background: 'none', border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}
+                  >
+                    KICK
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Pending Invites List: Only for Owners */}
+          {selectedTeam.user_role === 'owner' && pendingInvites.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <label style={labelStyle}>Pending Invites</label>
+              {pendingInvites.map((invite: any) => (
+                <div key={invite.user_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1a1a1a' }}>
+                  <span style={{ color: '#eee', fontSize: 13 }}>{invite.Users?.username}</span>
+                  <button 
+                    onClick={() => setPendingRevoke({ show: true, userId: invite.user_id, username: invite.Users?.username })} 
+                    style={{ 
+                      background: 'none', 
+                      border: '1px solid #ff4d4d', 
+                      color: '#ff4d4d', 
+                      padding: '4px 8px', 
+                      borderRadius: 4, 
+                      fontSize: 10, 
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    REVOKE
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </ModalShell>
       )}
 
@@ -781,7 +1134,26 @@ export default function Teams() {
         </ModalShell>
       )}
 
-      {pendingMemberAction.show && <ModalShell title={`${pendingMemberAction.action?.toUpperCase()} User?`} onClose={() => setPendingMemberAction({ show: false, userId: "", username: "", action: null })} onConfirm={() => { handleMemberAction(pendingMemberAction.userId, pendingMemberAction.action!); setPendingMemberAction({ show: false, userId: "", username: "", action: null }); }} confirmText="Confirm" isDelete={pendingMemberAction.action === 'kick'} globalFont={globalFont}><p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>Are you sure you want to <b>{pendingMemberAction.action}</b><span style={{ color: '#f65dfb' }}> {pendingMemberAction.username}</span>?</p></ModalShell>}
+      {pendingMemberAction.show && (
+        <ModalShell 
+          title="Confirm Action" 
+          onClose={() => setPendingMemberAction({ show: false, userId: "", username: "", action: null })} 
+          onConfirm={() => {
+            handleMemberAction(pendingMemberAction.userId, pendingMemberAction.action!);
+            setPendingMemberAction({ show: false, userId: "", username: "", action: null });
+          }} 
+          confirmText="Confirm" 
+          isDelete={pendingMemberAction.action === 'kick'} 
+          globalFont={globalFont}
+        >
+          <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>
+            Are you sure you want to <b style={{ color: '#ff4d4d' }}>{pendingMemberAction.action}</b> 
+            <span style={{ color: '#f65dfb' }}> {pendingMemberAction.username}</span>?
+            <br/><br/>
+            This action cannot be undone.
+          </p>
+        </ModalShell>
+      )}
       {isDeletingTeam && <ModalShell title="Delete Team?" onClose={() => setIsDeletingTeam(false)} onConfirm={handleDeleteTeam} confirmText="Delete Forever" isDelete={true} globalFont={globalFont}><p style={{ color: '#888', textAlign: 'center' }}>Are you sure you want to delete <b>{selectedTeam.name}</b>?</p></ModalShell>}
       {isCreating && (
         <ModalShell 
@@ -798,8 +1170,33 @@ export default function Teams() {
           <textarea value={teamDesc} onChange={e => setTeamDesc(e.target.value)} placeholder="Description" style={{ ...inputStyle, height: 80, resize: 'none' }} />
           <label style={labelStyle}>Team Icon (URL)</label>
           <input type="text" value={teamIcon} onChange={e => setTeamIcon(e.target.value)} placeholder="Icon URL" style={inputStyle} />
+          <label style={labelStyle}>Team Visibility</label>
+          <select value={visibility} onChange={(e: any) => setVisibility(e.target.value)} style={inputStyle}>
+            <option value="public">Public (Anyone can join)</option>
+            <option value="invite_only">Invite Only (Must be invited)</option>
+            <option value="closed">Closed (Hidden from Discovery)</option>
+          </select>
         </ModalShell>
       )}
+
+      {pendingRevoke.show && (
+        <ModalShell 
+          title="Revoke Invite?" 
+          onClose={() => setPendingRevoke({ show: false, userId: "", username: "" })} 
+          onConfirm={async () => {
+            await handleCancelInvite(pendingRevoke.userId);
+            setPendingRevoke({ show: false, userId: "", username: "" });
+          }} 
+          confirmText="Revoke" 
+          isDelete={true} 
+          globalFont={globalFont}
+        >
+          <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>
+            Are you sure you want to revoke the invite for <b style={{ color: '#f65dfb' }}>{pendingRevoke.username}</b>?
+          </p>
+        </ModalShell>
+      )}
+
       {nameConflict.show && (
         <ModalShell 
           title="Name Taken" 
@@ -814,6 +1211,7 @@ export default function Teams() {
           </p>
         </ModalShell>
       )}
+
       {isErrorModalOpen.show && (
         <ModalShell title="Error" zIndex={4000} onClose={() => setIsErrorModalOpen({ show: false, msg: "" })} showButtons={false} globalFont={globalFont} isDelete={true}>
           <p style={{ color: '#888', textAlign: 'center', lineHeight: '1.5' }}>{isErrorModalOpen.msg}</p>

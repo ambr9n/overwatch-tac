@@ -2,9 +2,6 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../Supabase';
 import { NavLink, useNavigate } from 'react-router-dom';
 
-/**
- * CUSTOM MODAL COMPONENT
- */
 const CustomModal: React.FC<{
   isOpen: boolean;
   title: string;
@@ -72,7 +69,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   
-  // Logic Refs
   const observer = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
   const pageRef = useRef(0);
@@ -88,25 +84,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   });
 
   const navigate = useNavigate();
-  const [userSearch, setUserSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(async () => {
-      if (userSearch.trim().length > 1) {
-        const { data } = await supabase
-          .from("Users")
-          .select("user_id, username, profile_image_link")
-          .ilike("username", `%${userSearch}%`)
-          .limit(5);
-        setSearchResults(data || []);
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [userSearch]);
 
   const calculateAlgorithmicScore = (post: ForumPost) => {
     const likes = post.Post_Likes?.length || 0;
@@ -205,7 +182,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
 
   const getUserData = (userField: any) => Array.isArray(userField) ? userField[0] : userField;
 
-  // Interactions
   const handleLike = async (postId: string) => {
     const { data: existing } = await supabase.from("Post_Likes").select("*").eq("post_id", postId).eq("user_id", currentUser.id).maybeSingle();
     if (existing) await supabase.from("Post_Likes").delete().eq("post_id", postId).eq("user_id", currentUser.id);
@@ -262,7 +238,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑️</button>}
+        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑</button>}
       </div>
     );
   };
@@ -324,32 +300,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
       <div style={{ marginBottom: 15, display: "flex", gap: 10 }}>
         <input value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's on your mind?" style={{ flex: 1, padding: 12, borderRadius: 8, background: "#0a0a0a", border: "1px solid #333", color: "white" }} />
         <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts(true);}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#dd65fb", color: "white", cursor: "pointer", border: 'none' }}>Post</button>
-      </div>
-
-      <div style={{ position: 'relative', marginBottom: 30 }}>
-        <input 
-          type="text" 
-          value={userSearch} 
-          onChange={(e) => setUserSearch(e.target.value)} 
-          placeholder="Search for accounts..." 
-          style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "#111", border: "1px solid #282828", color: "white", boxSizing: 'border-box' }} 
-        />
-        {searchResults.length > 0 && (
-          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#161616", border: "1px solid #282828", borderRadius: "0 0 10px 10px", zIndex: 100, overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-            {searchResults.map(user => (
-              <div 
-                key={user.user_id} 
-                onClick={() => { navigate(`/profile/${user.user_id}`); setUserSearch(""); }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", cursor: "pointer", borderBottom: "1px solid #222" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#222")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                <img src={user.profile_image_link || DEFAULT_AVATAR} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
-                <span style={{ fontWeight: "bold", color: "white" }}>{user.username}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <CustomModal isOpen={deleteModal.isOpen} title="Delete?" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>Permanently delete this?</CustomModal>

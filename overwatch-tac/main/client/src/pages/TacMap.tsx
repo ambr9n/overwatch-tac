@@ -3,9 +3,6 @@ import { supabase } from "../Supabase";
 import { useSearchParams } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
-/**
- * TYPES & INTERFACES
- */
 type Team = "ally" | "enemy";
 type GameMode = "Control" | "Escort" | "Hybrid" | "Push" | "Flashpoint" | "Clash" | "Assault";
 type ToolType = "select" | "pen" | "eraser";
@@ -47,9 +44,6 @@ interface HistoryState {
   drawings: DrawingLine[];
 }
 
-/**
- * REUSABLE COMPONENTS
- */
 interface CustomModalProps {
   isOpen: boolean;
   title: string;
@@ -371,10 +365,10 @@ const TacMap: React.FC = () => {
         const { data: assets } = await supabase.from("Map_Assets").select("*").eq("save_id", id);
         let loadedMarkers: Marker[] = [];
         if (assets) {
-          loadedMarkers = assets.map((a: any) => {
+          loadedMarkers = assets.map((a: any, idx: number) => {
             const hero = heroAssets.find(h => h.asset_id === a.asset_id);
             return {
-              id: a.id, x: a.x_position, y: a.y_position, team: a.hero_team as Team,
+              id: a.id || (Date.now() + idx), x: a.x_position, y: a.y_position, team: a.hero_team as Team,
               type: a.asset_id ? "asset" : "player", iconUrl: hero?.image_path,
               heroName: hero?.name, label: a.asset_id ? undefined : (a.hero_team === "ally" ? "A" : "E")
             };
@@ -600,8 +594,6 @@ const TacMap: React.FC = () => {
 
   return (
     <div style={{ color: "white", backgroundColor: "#111", position: "fixed", top: "60px", left: 0, height: "calc(100vh - 60px)", width: "100vw", display: "flex", overflow: "hidden", zIndex: 50 }}>
-      
-      {/* LEFT SIDEBAR */}
       <div style={{ 
         width: sidebarOpen ? "350px" : "0px", background: "#161616", 
         borderRight: sidebarOpen ? "1px solid #282828" : "none", display: "flex", 
@@ -664,7 +656,6 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {/* VIEWPORT */}
       <div 
         ref={mapRef} 
         onWheel={handleWheel} 
@@ -677,7 +668,6 @@ const TacMap: React.FC = () => {
         onContextMenu={(e) => e.preventDefault()}
         style={{ flex: 1, display: "flex", backgroundColor: "#000000", position: "relative", minWidth: 0, justifyContent: "center", alignItems: "center", overflow: "hidden", cursor: spacePressed || isPanning ? "grabbing" : selectedMap ? "default" : "not-allowed" }}
       >
-        {/* LEFT TOGGLE */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           style={{ position: "absolute", top: "20px", left: "10px", zIndex: 15, background: "linear-gradient(45deg, #e60082, #f65dfb)", border: "none", color: "white", borderRadius: "4px", width: "36px", height: "36px", cursor: "pointer", fontWeight: "bold", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(230, 0, 130, 0.3)" }}
@@ -685,7 +675,6 @@ const TacMap: React.FC = () => {
           {sidebarOpen ? "«" : "»"}
         </button>
 
-        {/* TOP RIGHT UI STACK (Toggle + Zoom) */}
         <div style={{ 
           position: "absolute", top: "20px", right: "10px", zIndex: 15, 
           display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px" 
@@ -715,7 +704,6 @@ const TacMap: React.FC = () => {
           </div>
         </div>
 
-        {/* INNER SCALING CONTAINER */}
         <div 
           style={{
             display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", transition: "all 0.3s ease-in-out"
@@ -762,7 +750,6 @@ const TacMap: React.FC = () => {
           </div>
         </div>
 
-        {/* TOOLBAR */}
         <div style={{ position: "absolute", bottom: "30px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "15px", background: "rgba(22, 22, 22, 0.9)", padding: "10px 20px", borderRadius: "12px", border: "1px solid #333", backdropFilter: "blur(10px)", zIndex: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.5)", opacity: selectedMap ? 1 : 0.5, pointerEvents: selectedMap ? "auto" : "none" }}>
           <ToolButton name="select" icon={<SelectIcon />} activeTool={activeTool} onClick={setActiveTool} title="Select (S)" />
           <ToolButton name="pen" icon={<PenIcon />} activeTool={activeTool} onClick={setActiveTool} title="Pen (P)" />
@@ -782,7 +769,6 @@ const TacMap: React.FC = () => {
         )}
       </div>
 
-      {/* RIGHT SIDEBAR */}
       <div style={{ width: rightSidebarOpen ? "320px" : "0px", background: "#161616", borderLeft: rightSidebarOpen ? "1px solid #282828" : "none", display: "flex", flexDirection: "column", transition: "width 0.3s ease", overflow: "hidden", flexShrink: 0 }}>
         <div style={{ padding: "20px", minWidth: "320px", height: "100%", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -821,7 +807,6 @@ const TacMap: React.FC = () => {
         </div>
       </div>
 
-      {/* MAP SELECTOR & MODALS */}
       {isMapSelectorOpen && (
         <div style={{ position: "fixed", top: "60px", left: 0, width: "100vw", height: "calc(100vh - 60px)", backgroundColor: "rgba(0, 0, 0, 0.94)", display: "flex", flexDirection: "column", zIndex: 2000, padding: "40px", backdropFilter: "blur(8px)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", maxWidth: "1200px", width: "100%", margin: "0 auto 30px auto" }}>

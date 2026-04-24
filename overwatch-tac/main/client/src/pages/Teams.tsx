@@ -184,6 +184,7 @@ export default function Teams() {
       } else {
         const { data } = await supabase.from("Teams")
           .select(`*, User_Teams(count)`)
+          .eq('User_Teams.status', 'accepted')
           .in("team_id", teamIds);
         
         setTeams(data?.map(t => ({ 
@@ -200,6 +201,7 @@ export default function Teams() {
           User_Teams(count),
           membership:User_Teams(user_id) 
         `)
+        .eq('User_Teams.status', 'accepted')
         .range(from, to)
         .order('name');
 
@@ -1053,6 +1055,7 @@ export default function Teams() {
             const isManager = selectedTeam.user_role === 'manager';
             const isSelf = member.user_id === currentUser?.id;
             
+            const canManage = isOwner && !isSelf;
             const canKick = !isSelf && (isOwner || (isManager && member.role === 'member'));
 
             return (
@@ -1062,25 +1065,44 @@ export default function Teams() {
                   <span style={{ color: '#888', fontSize: 11, marginLeft: 10 }}>{member.role.toUpperCase()}</span>
                 </div>
 
-                {canKick && (
-                  <button 
-                    onClick={() => setPendingMemberAction({ 
-                      show: true, 
-                      userId: member.user_id, 
-                      username: member.Users?.username || "this user", 
-                      action: 'kick' 
-                    })}
-                    style={{ background: 'none', border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}
-                  >
-                    KICK
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {/* Only Owners should be able to promote/demote others to keep hierarchy clean */}
+                  {canManage && member.role === 'member' && (
+                    <button 
+                      onClick={() => handleMemberAction(member.user_id, 'promote')}
+                      style={{ background: 'none', border: '1px solid #f65dfb', color: '#f65dfb', padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}
+                    >
+                      PROMOTE
+                    </button>
+                  )}
+                  {canManage && member.role === 'manager' && (
+                    <button 
+                      onClick={() => handleMemberAction(member.user_id, 'demote')}
+                      style={{ background: 'none', border: '1px solid #888', color: '#888', padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}
+                    >
+                      DEMOTE
+                    </button>
+                  )}
+                  {canKick && (
+                    <button 
+                      onClick={() => setPendingMemberAction({ 
+                        show: true, 
+                        userId: member.user_id, 
+                        username: member.Users?.username || "this user", 
+                        action: 'kick' 
+                      })}
+                      style={{ background: 'none', border: '1px solid #ff4d4d', color: '#ff4d4d', padding: '4px 8px', borderRadius: 4, fontSize: 10, cursor: 'pointer' }}
+                    >
+                      KICK
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
 
-          {/* Pending Invites List: Only for Owners */}
-          {selectedTeam.user_role === 'owner' && pendingInvites.length > 0 && (
+          {/* Pending Invites List */}
+          {(selectedTeam.user_role === 'owner' || selectedTeam.user_role === 'manager') && pendingInvites.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <label style={labelStyle}>Pending Invites</label>
               {pendingInvites.map((invite: any) => (

@@ -329,32 +329,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         <button onClick={() => { if (!newPostText.trim()) return; supabase.from("Forum_Posts").insert([{ text: newPostText, user_id: currentUser.id }]).then(() => {setNewPostText(""); fetchPosts(true);}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "#dd65fb", color: "white", cursor: "pointer", border: 'none' }}>Post</button>
       </div>
 
-      <div style={{ position: 'relative', marginBottom: 30 }}>
-        <input 
-          type="text" 
-          value={userSearch} 
-          onChange={(e) => setUserSearch(e.target.value)} 
-          placeholder="Search for accounts..." 
-          style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "#111", border: "1px solid #282828", color: "white", boxSizing: 'border-box' }} 
-        />
-        {searchResults.length > 0 && (
-          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#161616", border: "1px solid #282828", borderRadius: "0 0 10px 10px", zIndex: 100, overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-            {searchResults.map(user => (
-              <div 
-                key={user.user_id} 
-                onClick={() => { navigate(`/profile/${user.user_id}`); setUserSearch(""); }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", cursor: "pointer", borderBottom: "1px solid #222" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#222")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                <img src={user.profile_image_link || DEFAULT_AVATAR} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
-                <span style={{ fontWeight: "bold", color: "white" }}>{user.username}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       <CustomModal isOpen={deleteModal.isOpen} title="Delete?" confirmColor="#ff4d4d" onConfirm={confirmDelete} onCancel={() => setDeleteModal({ isOpen: false, type: 'post', id: null })}>Permanently delete this?</CustomModal>
 
       {posts.map((post, index) => {
@@ -365,7 +339,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
         return (
           <div key={post.post_id} ref={index === posts.length - 1 ? lastElementRef : null} style={{ background: "#0a0a0a", padding: 24, borderRadius: 12, border: "1px solid #1a1a1a", marginBottom: 20 }}>
             <AuthorHeader user={post.Users} userId={post.user_id} createdAt={post.created_at} showDelete={enrichedUser?.is_mod || enrichedUser?.id === post.user_id} onDelete={() => setDeleteModal({ isOpen: true, type: 'post', id: post.post_id })} />
-            <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd' }}>{post.text}</p></div>
+            <div style={{ margin: "18px 0" }}><p style={{ fontSize: '1rem', color: '#ddd', overflowWrap: 'anywhere' }}>{post.text}</p></div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <button onClick={() => handleLike(post.post_id)} style={{ background: isLiked ? "#dd65fb33" : "#1a1a1a", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👍 {post.Post_Likes?.length || 0}</button>
               <button onClick={() => handleDislike(post.post_id)} style={{ background: isDisliked ? "#ef444433" : "#1a1a1a", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>👎 {post.Post_Dislikes?.length || 0}</button>

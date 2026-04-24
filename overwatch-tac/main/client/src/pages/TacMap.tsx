@@ -180,6 +180,7 @@ const TacMap: React.FC = () => {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [newStrategyName, setNewStrategyName] = useState("");
+  const [isTitleTooLongModalOpen, setIsTitleTooLongModalOpen] = useState(false);
   
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [hoveredMap, setHoveredMap] = useState<MapData | null>(null);
@@ -397,8 +398,15 @@ const TacMap: React.FC = () => {
 
   const finalizeSave = async () => {
     if (!newStrategyName && !activeSaveId) return;
+
+    if (newStrategyName.length > 30) {
+      setIsNameModalOpen(false);
+      setIsTitleTooLongModalOpen(true);
+      return;
+    }
     setIsNameModalOpen(false);
     setIsSaving(true);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setIsAuthModalOpen(true); setIsSaving(false); return; }
@@ -854,6 +862,21 @@ const TacMap: React.FC = () => {
       </CustomModal>
       <CustomModal isOpen={isAuthModalOpen} title="Not Signed In" onConfirm={() => navigate("/login")} showCancel={true} confirmText="Log In">
         <p style={{ color: "#aaa" }}>Sign in to save plans.</p>
+      </CustomModal>
+      <CustomModal 
+        isOpen={isTitleTooLongModalOpen} 
+        title="Title Too Long" 
+        onConfirm={() => {
+          setIsTitleTooLongModalOpen(false);
+          setIsNameModalOpen(true);
+        }} 
+        showCancel={false} 
+        confirmText="Try Again"
+      >
+        <p style={{ color: "#aaa" }}>
+          Strategy titles must be <strong>30 characters</strong> or less. 
+          Current length: {newStrategyName.length}
+        </p>
       </CustomModal>
     </div>
   );

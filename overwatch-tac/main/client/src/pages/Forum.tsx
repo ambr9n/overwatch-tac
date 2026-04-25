@@ -84,25 +84,6 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   });
 
   const navigate = useNavigate();
-  const [userSearch, setUserSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(async () => {
-      if (userSearch.trim().length > 1) {
-        const { data } = await supabase
-          .from("Users")
-          .select("user_id, username, profile_image_link")
-          .ilike("username", `%${userSearch}%`)
-          .limit(5);
-        setSearchResults(data || []);
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [userSearch]);
 
   const calculateAlgorithmicScore = (post: ForumPost) => {
     const likes = post.Post_Likes?.length || 0;
@@ -265,7 +246,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
             <div style={{ fontSize: 11, color: "#555" }}>{new Date(createdAt).toLocaleString()}</div>
           </div>
         </div>
-        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑️</button>}
+        {showDelete && <button onClick={onDelete} style={{ background: "#1a1a1a", border: "1px solid #333", color: "white", padding: "6px 10px", borderRadius: 8, cursor: "pointer" }}>🗑</button>}
       </div>
     );
   };

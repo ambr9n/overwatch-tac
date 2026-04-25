@@ -147,7 +147,7 @@ const Saves: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const navigate = useNavigate();
 
-  const gridLayout = "1.5fr 1fr 1fr 1.5fr";
+  const gridLayout = "1fr 200px 100px 160px";
 
   useEffect(() => {
     checkAuthAndFetch();

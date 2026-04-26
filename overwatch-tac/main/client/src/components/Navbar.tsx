@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect, type FC } from "react";
 import { supabase } from "../Supabase";
 import "./Navbar.css";
@@ -6,6 +6,9 @@ import "./Navbar.css";
 const Navbar: FC = () => {
   const [user, setUser] = useState<any | null>(null);
   const [profileData, setProfileData] = useState<{ username: string; profile_image_link: string; user_id: string } | null>(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const navigate = useNavigate();
 
   const DEFAULT_AVATAR = "https://i.imgur.com/HeIi0wU.png";
 
@@ -49,9 +52,37 @@ const Navbar: FC = () => {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (userSearch.trim().length > 0) {
+        const { data } = await supabase
+          .from("Users")
+          .select("user_id, username, profile_image_link")
+          .ilike("username", `%${userSearch}%`)
+          .limit(5);
+        
+        if (data) {
+          const sorted = [...data].sort((a, b) => {
+            const aIndex = a.username.toLowerCase().indexOf(userSearch.toLowerCase());
+            const bIndex = b.username.toLowerCase().indexOf(userSearch.toLowerCase());
+            if (aIndex !== bIndex) return aIndex - bIndex;
+            return a.username.localeCompare(b.username);
+          });
+          setSearchResults(sorted.slice(0, 5));
+        } else {
+          setSearchResults([]);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [userSearch]);
+
   return (
-    <div className="navbar">
-      <div className="nav-left">
+    <div className="navbar" style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="nav-left" style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <NavLink to="/" end className="nav-link">Home</NavLink>
         <NavLink to="/tacmap" className="nav-link">Tac Map</NavLink>
         <NavLink to="/saves" className="nav-link">Saves</NavLink>
@@ -59,7 +90,35 @@ const Navbar: FC = () => {
         <NavLink to="/forum" className="nav-link">Forum</NavLink>
       </div>
 
-      <div className="nav-right">
+      <div className="nav-right" style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        {/* Search bar moved to right-hand container, positioned to the left of the profile/auth buttons */}
+        <div style={{ position: 'relative', width: '25ch', marginRight: '20px' }}>
+          <input 
+            type="text" 
+            maxLength={25}
+            value={userSearch} 
+            onChange={(e) => setUserSearch(e.target.value)} 
+            placeholder="Search..." 
+            style={{ width: "100%", padding: "8px 16px", borderRadius: "20px", background: "#111", border: "1px solid #282828", color: "white", boxSizing: 'border-box', outline: 'none' }} 
+          />
+          {searchResults.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#161616", border: "1px solid #282828", borderRadius: "0 0 10px 10px", zIndex: 100, overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+              {searchResults.map(user => (
+                <div 
+                  key={user.user_id} 
+                  onClick={() => { navigate(`/profile/${user.user_id}`); setUserSearch(""); }}
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px", cursor: "pointer", borderBottom: "1px solid #222" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#222")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <img src={user.profile_image_link || DEFAULT_AVATAR} style={{ width: 24, height: 24, borderRadius: "50%", objectFit: "cover" }} />
+                  <span style={{ fontWeight: "bold", color: "white", fontSize: '14px' }}>{user.username}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {user && profileData ? (
           <NavLink to={`/profile/${profileData.user_id}`} className="nav-link login profile-link">
             <img

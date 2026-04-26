@@ -39,7 +39,6 @@ const App = () => {
 
   return (
     <>
-      {/* Startup Animation */}
       {showIntro && <Startup onFinish={() => setShowIntro(false)} />}
 
       <Router>

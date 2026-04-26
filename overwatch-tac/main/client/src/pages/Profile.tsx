@@ -303,20 +303,63 @@ export default function Profile() {
     const other = type === 'like' ? 'Post_Dislikes' : 'Post_Likes';
     await supabase.from(other).delete().eq('post_id', postId).eq('user_id', currentUser.id);
     const { data: existing } = await supabase.from(table).select('*').eq('post_id', postId).eq('user_id', currentUser.id).maybeSingle();
-    if (existing) await supabase.from(table).delete().eq('post_id', postId).eq('user_id', currentUser.id);
-    else await supabase.from(table).insert([{ post_id: postId, user_id: currentUser.id }]);
-    fetchPosts(profile.user_id);
+    if (existing) {
+      await supabase.from(table).delete().eq('post_id', postId).eq('user_id', currentUser.id);
+      setPosts(prev => prev.map(p => p.post_id !== postId ? p : {
+        ...p,
+        Post_Likes: p.Post_Likes.filter((l: any) => l.user_id !== currentUser.id),
+        Post_Dislikes: p.Post_Dislikes.filter((d: any) => d.user_id !== currentUser.id),
+      }));
+    } else {
+      await supabase.from(table).insert([{ post_id: postId, user_id: currentUser.id }]);
+      setPosts(prev => prev.map(p => p.post_id !== postId ? p : {
+        ...p,
+        Post_Likes: type === 'like'
+          ? [...p.Post_Likes, { user_id: currentUser.id }]
+          : p.Post_Likes.filter((l: any) => l.user_id !== currentUser.id),
+        Post_Dislikes: type === 'dislike'
+          ? [...p.Post_Dislikes, { user_id: currentUser.id }]
+          : p.Post_Dislikes.filter((d: any) => d.user_id !== currentUser.id),
+      }));
+    }
   };
 
-  const handleReplyAction = async (replyId: string, type: 'like' | 'dislike') => {
+  const handleReplyAction = async (replyId: string, postId: string, type: 'like' | 'dislike') => {
     if (!currentUser) return;
     const table = type === 'like' ? 'Reply_Likes' : 'Reply_Dislikes';
     const other = type === 'like' ? 'Reply_Dislikes' : 'Reply_Likes';
     await supabase.from(other).delete().eq('reply_id', replyId).eq('user_id', currentUser.id);
     const { data: existing } = await supabase.from(table).select('*').eq('reply_id', replyId).eq('user_id', currentUser.id).maybeSingle();
-    if (existing) await supabase.from(table).delete().eq('reply_id', replyId).eq('user_id', currentUser.id);
-    else await supabase.from(table).insert([{ reply_id: replyId, user_id: currentUser.id }]);
-    fetchPosts(profile.user_id);
+
+    const updateReply = (reply: any): any => {
+      if (reply.reply_id !== replyId) return reply;
+      if (existing) {
+        return {
+          ...reply,
+          Reply_Likes: reply.Reply_Likes.filter((l: any) => l.user_id !== currentUser.id),
+          Reply_Dislikes: reply.Reply_Dislikes.filter((d: any) => d.user_id !== currentUser.id),
+        };
+      }
+      return {
+        ...reply,
+        Reply_Likes: type === 'like'
+          ? [...reply.Reply_Likes, { user_id: currentUser.id }]
+          : reply.Reply_Likes.filter((l: any) => l.user_id !== currentUser.id),
+        Reply_Dislikes: type === 'dislike'
+          ? [...reply.Reply_Dislikes, { user_id: currentUser.id }]
+          : reply.Reply_Dislikes.filter((d: any) => d.user_id !== currentUser.id),
+      };
+    };
+
+    if (existing) {
+      await supabase.from(table).delete().eq('reply_id', replyId).eq('user_id', currentUser.id);
+    } else {
+      await supabase.from(table).insert([{ reply_id: replyId, user_id: currentUser.id }]);
+    }
+
+    setPosts(prev => prev.map(p => p.post_id !== postId ? p : {
+      ...p, Forum_Replies: p.Forum_Replies.map(updateReply)
+    }));
   };
 
   const handleInsertReply = async (postId: string) => {
@@ -411,8 +454,8 @@ export default function Profile() {
               <p style={{ fontSize: 14, color: "#ccc", margin: "14px 0", overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{reply.text}</p>
               
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <button onClick={() => handleReplyAction(reply.reply_id, 'like')} style={{ background: isLiked ? "#dd65fb33" : "#222", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
-                <button onClick={() => handleReplyAction(reply.reply_id, 'dislike')} style={{ background: isDisliked ? "#ef444433" : "#222", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
+                <button onClick={() => handleReplyAction(reply.reply_id, postId, 'like')} style={{ background: isLiked ? "#dd65fb33" : "#222", border: isLiked ? "1px solid #253aefff" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👍 {reply.Reply_Likes?.length || 0}</button>
+                <button onClick={() => handleReplyAction(reply.reply_id, postId, 'dislike')} style={{ background: isDisliked ? "#ef444433" : "#222", border: isDisliked ? "1px solid #ef4444" : "1px solid #333", color: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: "0.8rem" }}>👎 {reply.Reply_Dislikes?.length || 0}</button>
                 <button onClick={() => setReplyingTo({ postId, replyId: reply.reply_id, username: reply.Users?.username })} style={{ background: 'none', border: 'none', color: '#dd65fb', cursor: 'pointer', fontSize: 12 }}>Reply</button>
               </div>
 

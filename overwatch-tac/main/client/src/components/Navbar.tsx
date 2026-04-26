@@ -88,8 +88,11 @@ const Navbar: FC = () => {
         <NavLink to="/saves" className="nav-link">Saves</NavLink>
         <NavLink to="/teams" className="nav-link">Teams</NavLink>
         <NavLink to="/forum" className="nav-link">Forum</NavLink>
-        
-        <div style={{ position: 'relative', width: '25ch', marginLeft: '20px' }}>
+      </div>
+
+      <div className="nav-right" style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        {/* Search bar moved to right-hand container, positioned to the left of the profile/auth buttons */}
+        <div style={{ position: 'relative', width: '25ch', marginRight: '20px' }}>
           <input 
             type="text" 
             maxLength={25}
@@ -115,9 +118,7 @@ const Navbar: FC = () => {
             </div>
           )}
         </div>
-      </div>
 
-      <div className="nav-right" style={{ flexShrink: 0 }}>
         {user && profileData ? (
           <NavLink to={`/profile/${profileData.user_id}`} className="nav-link login profile-link">
             <img

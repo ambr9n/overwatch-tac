@@ -59,7 +59,7 @@ const Navbar: FC = () => {
           .from("Users")
           .select("user_id, username, profile_image_link")
           .ilike("username", `%${userSearch}%`)
-          .limit(10);
+          .limit(5);
         
         if (data) {
           const sorted = [...data].sort((a, b) => {

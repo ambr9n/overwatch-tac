@@ -38,6 +38,7 @@ export default function Teams() {
   const [teamSaves, setTeamSaves] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [hoveredTeamId, setHoveredTeamId] = useState<string | null>(null);
   const [hoveredSaveId, setHoveredSaveId] = useState<string | null>(null);
 
@@ -110,6 +111,7 @@ export default function Teams() {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      setAuthChecked(true);
       if (user) {
         const [following, followers] = await Promise.all([
           supabase.from("Follows").select("following_id").eq("follower_id", user.id),
@@ -706,26 +708,50 @@ export default function Teams() {
     </div>
   );
 
+  // Splashscreen for logged-out users
+  if (authChecked && !currentUser) {
+    return (
+      <div style={{ padding: "120px 40px 40px", color: "white", backgroundColor: "#111", minHeight: "100vh", fontFamily: globalFont }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <h2 style={{ marginBottom: "40px", fontSize: "36px", fontWeight: "750", letterSpacing: "-1px" }}>Teams</h2>
+          <div style={{
+            textAlign: "center", padding: "60px",
+            background: "#161616", borderRadius: "12px", border: "1px solid #282828",
+          }}>
+            <p style={{ color: "#777", fontSize: "18px", marginBottom: "20px" }}>
+              Sign in or sign up to create and join teams.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
+              <button
+                onClick={() => navigate("/login")}
+                style={{ background: "#e60082", color: "white", border: "none", padding: "12px 24px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
+              >
+                Log In
+              </button>
+              <button
+                onClick={() => navigate("/")}
+                style={{ background: "#555", color: "white", border: "none", padding: "12px 24px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ width: "100%", minHeight: "100vh", color: "white", fontFamily: globalFont }}>
       {!selectedTeam ? (
         <div style={{ maxWidth: 1000, margin: "100px auto", padding: "0 20px" }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
-            {currentUser ? (
-            <>
-              <div style={{ display: 'flex', gap: 30 }}>
-                <h1 onClick={() => setActiveTab("my_teams")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "my_teams" ? "white" : "#333" }}>My Teams</h1>
-                <h1 onClick={() => setActiveTab("discover")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "discover" ? "white" : "#333" }}>Discover</h1>
-                <h1 onClick={() => setActiveTab("invites")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "invites" ? "white" : "#333" }}>Invites</h1>
-              </div>
-              <button onClick={() => { setTeamName(""); setTeamDesc(""); setTeamIcon(""); setVisibility("public"); setIsCreating(true); }} style={{ background: "#f65dfb", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>+ Create Team</button>
-            </>
-            ) : (
-              <div style={{ width: '100%', textAlign: 'center', padding: '40px 0' }}>
-                <h1 style={{ margin: '0 0 10px 0', fontSize: '2.5rem', fontWeight: 900 }}>Teams</h1>
-                <button onClick={() => navigate('/login')} style={{ background: "#f65dfb", color: "white", border: "none", padding: "12px 30px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>Login to Continue</button>
-              </div>
-            )}
+            <div style={{ display: 'flex', gap: 30 }}>
+              <h1 onClick={() => setActiveTab("my_teams")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "my_teams" ? "white" : "#333" }}>My Teams</h1>
+              <h1 onClick={() => setActiveTab("discover")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "discover" ? "white" : "#333" }}>Discover</h1>
+              <h1 onClick={() => setActiveTab("invites")} style={{ margin: 0, fontSize: '1.8rem', fontWeight: 900, cursor: 'pointer', color: activeTab === "invites" ? "white" : "#333" }}>Invites</h1>
+            </div>
+            <button onClick={() => { setTeamName(""); setTeamDesc(""); setTeamIcon(""); setVisibility("public"); setIsCreating(true); }} style={{ background: "#f65dfb", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: "bold", cursor: "pointer" }}>+ Create Team</button>
           </div>
           {activeTab === "discover" && <input type="text" placeholder="Search for teams..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ ...inputStyle, marginBottom: 25 }} />}
 
@@ -772,7 +798,7 @@ export default function Teams() {
               ))
             )}
             {loading && <p style={{ textAlign: 'center', color: '#666' }}>Loading...</p>}
-            {!loading && (activeTab === "invites" ? invites.length === 0 : teams.length === 0) && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>No teams found.</p>}
+            {!loading && currentUser && (activeTab === "invites" ? invites.length === 0 : teams.length === 0) && <p style={{ textAlign: 'center', color: '#444', marginTop: 40 }}>No teams found.</p>}
           </div>
         </div>
       ) : (
@@ -1066,7 +1092,6 @@ export default function Teams() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {/* Only Owners should be able to promote/demote others to keep hierarchy clean */}
                   {canManage && member.role === 'member' && (
                     <button 
                       onClick={() => handleMemberAction(member.user_id, 'promote')}
@@ -1101,7 +1126,6 @@ export default function Teams() {
             );
           })}
 
-          {/* Pending Invites List */}
           {(selectedTeam.user_role === 'owner' || selectedTeam.user_role === 'manager') && pendingInvites.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <label style={labelStyle}>Pending Invites</label>

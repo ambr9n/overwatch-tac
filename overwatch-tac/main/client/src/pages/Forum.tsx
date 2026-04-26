@@ -68,6 +68,7 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
   const [loading, setLoading] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   
   const observer = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
@@ -198,6 +199,9 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
       if (user) {
         const { data: profile } = await supabase.from('Users').select('is_mod').eq('user_id', user.id).maybeSingle();
         setEnrichedUser({ ...(user || {}), id: user.id, is_mod: profile?.is_mod || false });
+        setIsLoggedIn(true);
+      } else {
+        setIsLoggedIn(false);
       }
     };
     syncUser();
@@ -348,6 +352,38 @@ export default function Forum({ currentUser }: { currentUser: ExtendedUser | any
       </div>
     );
   };
+
+  if (isLoggedIn === false) {
+    return (
+      <div style={{ padding: "120px 40px 40px", color: "white", backgroundColor: "#111", minHeight: "100vh" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <h2 style={{ marginBottom: "40px", fontSize: "36px", fontWeight: "750", letterSpacing: "-1px" }}>Forum</h2>
+          <div style={{
+            textAlign: "center", padding: "60px",
+            background: "#161616", borderRadius: "12px", border: "1px solid #282828",
+          }}>
+            <p style={{ color: "#777", fontSize: "18px", marginBottom: "20px" }}>
+              Sign in or sign up to join the conversation.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
+              <button
+                onClick={() => navigate("/login")}
+                style={{ background: "#e60082", color: "white", border: "none", padding: "12px 24px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
+              >
+                Log In
+              </button>
+              <button
+                onClick={() => navigate("/")}
+                style={{ background: "#555", color: "white", border: "none", padding: "12px 24px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && pageRef.current === 0) return null;
 

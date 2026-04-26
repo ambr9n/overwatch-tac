@@ -44,6 +44,112 @@ const CustomModal: React.FC<{
   );
 };
 
+const FollowListModal: React.FC<{
+  isOpen: boolean;
+  title: string;
+  users: any[];
+  currentUserId: string | null;
+  followingIds: Set<string>;
+  onClose: () => void;
+  onFollowToggle: (targetId: string, isCurrentlyFollowing: boolean) => void;
+  onNavigate: (userId: string) => void;
+}> = ({ isOpen, title, users, currentUserId, followingIds, onClose, onFollowToggle, onNavigate }) => {
+  if (!isOpen) return null;
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      backgroundColor: "rgba(0, 0, 0, 0.85)", display: "flex",
+      justifyContent: "center", alignItems: "center", zIndex: 1001,
+      backdropFilter: "blur(4px)"
+    }}>
+      <div style={{
+        background: "#161616", borderRadius: "12px",
+        border: "1px solid #282828", boxShadow: "0 0 30px #e6008233",
+        width: "420px", maxHeight: "70vh", display: "flex", flexDirection: "column"
+      }}>
+        {/* Header */}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "20px 24px 16px", borderBottom: "1px solid #282828", flexShrink: 0
+        }}>
+          <h3 style={{ color: "#f65dfb", margin: 0, fontSize: "18px", fontWeight: "750" }}>{title}</h3>
+          <button onClick={onClose} style={{
+            background: "none", border: "none", color: "#888", cursor: "pointer",
+            fontSize: "20px", lineHeight: 1, padding: "4px 8px"
+          }}>✕</button>
+        </div>
+
+        {/* User List */}
+        <div style={{ overflowY: "auto", padding: "12px 16px", flex: 1 }}>
+          {users.length === 0 ? (
+            <p style={{ color: "#555", textAlign: "center", padding: "30px 0", fontSize: 14 }}>No users yet.</p>
+          ) : (
+            users.map((u: any) => {
+              const isMe = currentUserId === u.user_id;
+              const isFollowing = followingIds.has(u.user_id);
+              return (
+                <div key={u.user_id} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 8px", borderRadius: 8,
+                  borderBottom: "1px solid #1a1a1a"
+                }}>
+                  <img
+                    src={u.profile_image_link || DEFAULT_AVATAR}
+                    style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", cursor: "pointer", flexShrink: 0 }}
+                    alt="avatar"
+                    onClick={() => { onNavigate(u.user_id); onClose(); }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {u.is_mod && (
+                        <span style={{
+                          background: "linear-gradient(45deg, #e60082, #f65dfb)",
+                          fontSize: 9, padding: "2px 5px", borderRadius: 4, color: "white",
+                          fontWeight: "bold", textTransform: "uppercase" as const, flexShrink: 0
+                        }}>MOD</span>
+                      )}
+                      <span
+                        onClick={() => { onNavigate(u.user_id); onClose(); }}
+                        style={{ color: "white", fontWeight: "bold", fontSize: 14, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}
+                      >
+                        {u.username}
+                      </span>
+                    </div>
+                    {u.bio && (
+                      <p style={{ color: "#666", fontSize: 12, margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                        {u.bio}
+                      </p>
+                    )}
+                  </div>
+                  {currentUserId && !isMe && (
+                    <button
+                      onClick={() => onFollowToggle(u.user_id, isFollowing)}
+                      style={{
+                        background: isFollowing ? "transparent" : "linear-gradient(45deg, #e60082, #f65dfb)",
+                        color: "white",
+                        border: isFollowing ? "1px solid #444" : "none",
+                        padding: "6px 14px",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                        fontSize: "0.75rem",
+                        flexShrink: 0,
+                        transition: "all 0.2s"
+                      }}
+                    >
+                      {isFollowing ? "Unfollow" : "Follow"}
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Profile() {
   const { uid } = useParams<{ uid: string }>();
   const navigate = useNavigate();
@@ -55,6 +161,15 @@ export default function Profile() {
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyingTo, setReplyingTo] = useState<{ postId: string; replyId: string; username: string } | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
+
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followerUsers, setFollowerUsers] = useState<any[]>([]);
+  const [followingUsers, setFollowingUsers] = useState<any[]>([]);
+  const [currentUserFollowingIds, setCurrentUserFollowingIds] = useState<Set<string>>(new Set());
+  const [followModal, setFollowModal] = useState<{ isOpen: boolean; type: "followers" | "following" }>({
+    isOpen: false, type: "followers"
+  });
 
   const [showSettings, setShowSettings] = useState(false);
   const [newUsername, setNewUsername] = useState("");
@@ -91,14 +206,69 @@ export default function Profile() {
               .eq("follower_id", user.id)
               .eq("following_id", profileId)
               .maybeSingle();
-
             setIsFollowing(!!followData);
         }
         fetchPosts(profileId);
+        fetchFollowCounts(profileId);
+        if (user) fetchCurrentUserFollowing(user.id);
       }
     };
     init();
   }, [uid]);
+
+  const fetchFollowCounts = async (profileId: string) => {
+    const [{ count: fCount }, { count: ingCount }] = await Promise.all([
+      supabase.from("User_Follows").select("*", { count: "exact", head: true }).eq("following_id", profileId),
+      supabase.from("User_Follows").select("*", { count: "exact", head: true }).eq("follower_id", profileId),
+    ]);
+    setFollowerCount(fCount || 0);
+    setFollowingCount(ingCount || 0);
+  };
+
+  const fetchCurrentUserFollowing = async (userId: string) => {
+    const { data } = await supabase.from("User_Follows").select("following_id").eq("follower_id", userId);
+    setCurrentUserFollowingIds(new Set((data || []).map((r: any) => r.following_id)));
+  };
+
+  const openFollowModal = async (type: "followers" | "following") => {
+    if (!profile) return;
+    if (type === "followers") {
+      const { data: followRows } = await supabase
+        .from("User_Follows").select("follower_id").eq("following_id", profile.user_id);
+      const ids = (followRows || []).map((r: any) => r.follower_id);
+      if (ids.length === 0) { setFollowerUsers([]); }
+      else {
+        const { data: users } = await supabase.from("Users").select("user_id, username, profile_image_link, bio, is_mod").in("user_id", ids);
+        setFollowerUsers(users || []);
+      }
+    } else {
+      const { data: followRows } = await supabase
+        .from("User_Follows").select("following_id").eq("follower_id", profile.user_id);
+      const ids = (followRows || []).map((r: any) => r.following_id);
+      if (ids.length === 0) { setFollowingUsers([]); }
+      else {
+        const { data: users } = await supabase.from("Users").select("user_id, username, profile_image_link, bio, is_mod").in("user_id", ids);
+        setFollowingUsers(users || []);
+      }
+    }
+    setFollowModal({ isOpen: true, type });
+  };
+
+  const handleModalFollowToggle = async (targetId: string, isCurrentlyFollowing: boolean) => {
+    if (!currentUser) return;
+    if (isCurrentlyFollowing) {
+      await supabase.from("User_Follows").delete().eq("follower_id", currentUser.id).eq("following_id", targetId);
+      setCurrentUserFollowingIds(prev => { const next = new Set(prev); next.delete(targetId); return next; });
+      // If we unfollowed the profile owner, update the main follow button too
+      if (profile && targetId === profile.user_id) setIsFollowing(false);
+    } else {
+      await supabase.from("User_Follows").insert([{ follower_id: currentUser.id, following_id: targetId }]);
+      setCurrentUserFollowingIds(prev => new Set(prev).add(targetId));
+      if (profile && targetId === profile.user_id) setIsFollowing(true);
+    }
+    // Refresh counts
+    if (profile) fetchFollowCounts(profile.user_id);
+  };
 
   const fetchPosts = async (userId: string) => {
     const { data } = await supabase.from("Forum_Posts")
@@ -181,20 +351,18 @@ export default function Profile() {
           .delete()
           .eq("follower_id", currentUser.id)
           .eq("following_id", profile.user_id);
-        
         if (error) throw error;
         setIsFollowing(false);
+        setCurrentUserFollowingIds(prev => { const next = new Set(prev); next.delete(profile.user_id); return next; });
       } else {
         const { error } = await supabase
           .from("User_Follows")
-          .insert([{ 
-            follower_id: currentUser.id, 
-            following_id: profile.user_id 
-          }]);
-        
+          .insert([{ follower_id: currentUser.id, following_id: profile.user_id }]);
         if (error) throw error;
         setIsFollowing(true);
+        setCurrentUserFollowingIds(prev => new Set(prev).add(profile.user_id));
       }
+      fetchFollowCounts(profile.user_id);
   };
 
   const AuthorHeader = ({ user, userId, createdAt, showDelete, onDelete }: any) => {
@@ -260,6 +428,7 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 850, margin: "80px auto", padding: 20, color: "white", fontFamily: 'sans-serif' }}>
+      
       <CustomModal 
         isOpen={deleteModal.isOpen} 
         title={deleteModal.type === 'post' ? "Delete Post?" : "Delete Reply?"} 
@@ -301,6 +470,17 @@ export default function Profile() {
         </div>
       </CustomModal>
 
+      <FollowListModal
+        isOpen={followModal.isOpen}
+        title={followModal.type === "followers" ? `Followers` : `Following`}
+        users={followModal.type === "followers" ? followerUsers : followingUsers}
+        currentUserId={currentUser?.id || null}
+        followingIds={currentUserFollowingIds}
+        onClose={() => setFollowModal({ ...followModal, isOpen: false })}
+        onFollowToggle={handleModalFollowToggle}
+        onNavigate={(userId) => navigate(`/profile/${userId}`)}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 40 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <img src={profile.profile_image_link || DEFAULT_AVATAR} style={{ width: 80, height: 80, borderRadius: "50%", border: "2px solid #333", objectFit: 'cover' }} />
@@ -309,7 +489,25 @@ export default function Profile() {
               {profile.is_mod && <span style={{ background: "linear-gradient(45deg, #e60082, #f65dfb)", fontSize: 12, padding: "3px 8px", borderRadius: 4, color: 'white', fontWeight: 'bold', textTransform: 'uppercase' }}>MOD</span>}
               <h2 style={{ margin: 0 }}>{profile.username}</h2>
             </div>
-            <p style={{ color: "#aaa", marginTop: 8 }}>{profile.bio}</p>
+            <p style={{ color: "#aaa", marginTop: 8, marginBottom: 10 }}>{profile.bio}</p>
+
+            {/* FOLLOWERS / FOLLOWING COUNTS */}
+            <div style={{ display: "flex", gap: 20 }}>
+              <button
+                onClick={() => openFollowModal("followers")}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
+              >
+                <span style={{ color: "white", fontWeight: "bold", fontSize: 15 }}>{followerCount}</span>
+                <span style={{ color: "#666", fontSize: 13, marginLeft: 5 }}>Followers</span>
+              </button>
+              <button
+                onClick={() => openFollowModal("following")}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
+              >
+                <span style={{ color: "white", fontWeight: "bold", fontSize: 15 }}>{followingCount}</span>
+                <span style={{ color: "#666", fontSize: 13, marginLeft: 5 }}>Following</span>
+              </button>
+            </div>
           </div>
         </div>
 

@@ -75,6 +75,7 @@ const Navbar: FC = () => {
         <NavLink to="/" end className="nav-link">Home</NavLink>
         <NavLink to="/tacmap" className="nav-link">Tac Map</NavLink>
         <NavLink to="/saves" className="nav-link">Saves</NavLink>
+        <NavLink to="/teams" className="nav-link">Teams</NavLink>
         <NavLink to="/forum" className="nav-link">Forum</NavLink>
       </div>
 

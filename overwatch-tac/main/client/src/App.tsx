@@ -16,7 +16,8 @@ import ProfileRedirect from "./pages/ProfileRedirect";
 import Teams from "./pages/Teams";
 import Forum from "./pages/Forum";
 import AboutUs from "./pages/AboutUs";
-import PrivacyPolicy from "./pages/PrivacyPolicy"; // Imported the new page
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import ContactUs from "./pages/Contact";
 
 const App = () => {
   const [showIntro, setShowIntro] = useState(true);
@@ -56,7 +57,10 @@ const App = () => {
               <Route path="/teams" element={<Teams />} />
               <Route path="/forum" element={<Forum currentUser={user} />} />
               <Route path="/about-us" element={<AboutUs />} />
-              <Route path="/privacy" element={<PrivacyPolicy />} /> {/* New Route */}
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+
+              {/* ✅ ADD THIS */}
+              <Route path="/contact" element={<ContactUs />} />
             </Routes>
           </main>
           <Footer />

@@ -1,6 +1,20 @@
 import { Link } from "react-router-dom";
 
 const Footer: React.FC = () => {
+  const linkStyle = {
+    color: "#aaa",
+    textDecoration: "none",
+    transition: "0.2s",
+  };
+
+  const hoverStyle = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.currentTarget.style.color = "#f65dfb";
+  };
+
+  const leaveStyle = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.currentTarget.style.color = "#aaa";
+  };
+
   return (
     <footer
       style={{
@@ -12,63 +26,41 @@ const Footer: React.FC = () => {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: "8px",
+        gap: "10px",
       }}
     >
       {/* Links row */}
       <div
         style={{
           display: "flex",
-          gap: "15px",
+          gap: "16px",
           flexWrap: "wrap",
           justifyContent: "center",
         }}
       >
-        <Link
-          to="/"
-          style={{ color: "#aaa", textDecoration: "none" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#f65dfb")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
-        >
+        <Link to="/" style={linkStyle} onMouseEnter={hoverStyle} onMouseLeave={leaveStyle}>
           Home
         </Link>
-        <Link
-          to="/forum"
-          style={{ color: "#aaa", textDecoration: "none" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#f65dfb")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
-        >
+
+        <Link to="/forum" style={linkStyle} onMouseEnter={hoverStyle} onMouseLeave={leaveStyle}>
           Forum
         </Link>
-        <Link
-          to="/about-us"
-          style={{ color: "#aaa", textDecoration: "none" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#f65dfb")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
-        >
+
+        <Link to="/about-us" style={linkStyle} onMouseEnter={hoverStyle} onMouseLeave={leaveStyle}>
           About Us
         </Link>
-        <Link
-          to="/privacy"
-          style={{ color: "#aaa", textDecoration: "none" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#f65dfb")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
-        >
+
+        <Link to="/privacy" style={linkStyle} onMouseEnter={hoverStyle} onMouseLeave={leaveStyle}>
           Privacy Policy
         </Link>
-        <Link
-          to="/contact"
-          style={{ color: "#aaa", textDecoration: "none" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#f65dfb")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
-        >
+
+        <Link to="/contact" style={linkStyle} onMouseEnter={hoverStyle} onMouseLeave={leaveStyle}>
           Contact
         </Link>
       </div>
 
-      {/* Copyright row */}
-      <div style={{ color: "#666" }}>
-        © {new Date().getFullYear()} OWTAC - Stockton Esports - Group 1
+      <div style={{ color: "#666", textAlign: "center" }}>
+        © {new Date().getFullYear()} OWTAC - The OWTAC Team
       </div>
     </footer>
   );

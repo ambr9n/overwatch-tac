@@ -17,12 +17,12 @@ const AboutUs: React.FC = () => {
         About OWTAC
       </h1>
       <p style={{ fontSize: "14px", color: "#666", marginBottom: "20px" }}>
-        Developed by Stockton University - Group 1
+        Developed by The OWTAC Team
       </p>
 
       <section style={{ marginBottom: "30px" }}>
         <p style={{ fontSize: "18px", marginBottom: "20px" }}>
-          Welcome to <strong>OWTAC</strong>, a web application designed and developed by <strong>Group 1</strong> as part of our Software Engineering class at Stockton University. 
+          Welcome to <strong>OWTAC</strong>, a web application designed and developed by <strong>The OWTAC Team</strong> as part of our Software Engineering class at Stockton University. 
           This project represents our effort to build a functional, interactive, and user-friendly platform for the Stockton Esports community. 
         </p>
         <p style={{ fontSize: "18px" }}>

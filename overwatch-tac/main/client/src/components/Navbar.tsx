@@ -54,13 +54,24 @@ const Navbar: FC = () => {
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
-      if (userSearch.trim().length > 1) {
+      if (userSearch.trim().length > 0) {
         const { data } = await supabase
           .from("Users")
           .select("user_id, username, profile_image_link")
           .ilike("username", `%${userSearch}%`)
-          .limit(5);
-        setSearchResults(data || []);
+          .limit(10);
+        
+        if (data) {
+          const sorted = [...data].sort((a, b) => {
+            const aIndex = a.username.toLowerCase().indexOf(userSearch.toLowerCase());
+            const bIndex = b.username.toLowerCase().indexOf(userSearch.toLowerCase());
+            if (aIndex !== bIndex) return aIndex - bIndex;
+            return a.username.localeCompare(b.username);
+          });
+          setSearchResults(sorted.slice(0, 5));
+        } else {
+          setSearchResults([]);
+        }
       } else {
         setSearchResults([]);
       }
@@ -71,21 +82,20 @@ const Navbar: FC = () => {
 
   return (
     <div className="navbar" style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div className="nav-left" style={{ flexShrink: 0 }}>
+      <div className="nav-left" style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <NavLink to="/" end className="nav-link">Home</NavLink>
         <NavLink to="/tacmap" className="nav-link">Tac Map</NavLink>
         <NavLink to="/saves" className="nav-link">Saves</NavLink>
         <NavLink to="/teams" className="nav-link">Teams</NavLink>
         <NavLink to="/forum" className="nav-link">Forum</NavLink>
-      </div>
-
-      <div style={{ flexGrow: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'inherit', margin: '0 20px', minWidth: 0 }}>
-        <div style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
+        
+        <div style={{ position: 'relative', width: '25ch', marginLeft: '20px' }}>
           <input 
             type="text" 
+            maxLength={25}
             value={userSearch} 
             onChange={(e) => setUserSearch(e.target.value)} 
-            placeholder="Search for accounts..." 
+            placeholder="Search..." 
             style={{ width: "100%", padding: "8px 16px", borderRadius: "20px", background: "#111", border: "1px solid #282828", color: "white", boxSizing: 'border-box', outline: 'none' }} 
           />
           {searchResults.length > 0 && (

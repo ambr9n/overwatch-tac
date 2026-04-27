@@ -1,7 +1,7 @@
 .home {
   min-height: 100vh;
   position: relative;
-  background: url(/public/images/owtacstrat.png) center/cover no-repeat; /* Chanages image name */
+  background: url(/public/images/owtacstrat.gif) center/cover no-repeat; /* Chanages image name */
   display: flex;
   align-items: center;
   justify-content: center;

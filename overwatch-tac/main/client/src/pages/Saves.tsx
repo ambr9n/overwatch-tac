@@ -241,20 +241,37 @@ const Saves: React.FC = () => {
                 : "No saves found. Save a map in the tacmap to start strategizing."}
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-              <button
-                onClick={() => navigate("/login")}
-                style={{
-                  background: "#e60082",
-                  color: "white",
-                  border: "none",
-                  padding: "12px 24px",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                Log In
-              </button>
+              {showAuthModal ? (
+                <button
+                  onClick={() => navigate("/login")}
+                  style={{
+                    background: "#e60082",
+                    color: "white",
+                    border: "none",
+                    padding: "12px 24px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Log In
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate("/tacmap")}
+                  style={{
+                    background: "#e60082",
+                    color: "white",
+                    border: "none",
+                    padding: "12px 24px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Go to Tac Map
+                </button>
+              )}
               <button
                 onClick={() => navigate("/")}
                 style={{

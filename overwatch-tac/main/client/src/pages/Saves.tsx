@@ -269,7 +269,7 @@ const Saves: React.FC = () => {
                     fontWeight: "bold",
                   }}
                 >
-                  Go to Tacmap
+                  Go to Tac Map
                 </button>
               )}
               <button

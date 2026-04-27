@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 interface SavedStrategy {
   save_id: string;
   name: string;
+  map_code: string | null;
   created_at: string;
   Maps: {
     name: string;
@@ -89,6 +90,21 @@ const CustomModal: React.FC<{
             justifyContent: "center",
           }}
         >
+          <button
+            onClick={onConfirm}
+            style={{
+              background: confirmColor,
+              color: "white",
+              border: "none",
+              padding: "10px 24px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontWeight: "bold",
+              boxShadow: `0 4px 10px ${confirmColor}4d`,
+            }}
+          >
+            {confirmText}
+          </button>
           {onCancel && (
             <button
               onClick={onCancel}
@@ -105,21 +121,6 @@ const CustomModal: React.FC<{
               Cancel
             </button>
           )}
-          <button
-            onClick={onConfirm}
-            style={{
-              background: confirmColor,
-              color: "white",
-              border: "none",
-              padding: "10px 24px",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              boxShadow: `0 4px 10px ${confirmColor}4d`,
-            }}
-          >
-            {confirmText}
-          </button>
         </div>
       </div>
 
@@ -142,8 +143,10 @@ const CustomModal: React.FC<{
 
 const Saves: React.FC = () => {
   const [saves, setSaves] = useState<SavedStrategy[]>([]);
+  const [sharingSave, setSharingSave] = useState<SavedStrategy | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [isDeletingCode, setIsDeletingCode] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const navigate = useNavigate();
 
@@ -165,7 +168,7 @@ const Saves: React.FC = () => {
 
       const { data, error } = await supabase
         .from("Saved_Maps")
-        .select(`save_id, name, created_at, Maps ( name )`)
+        .select(`save_id, name, map_code, created_at, Maps ( name )`)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -176,6 +179,45 @@ const Saves: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleShareAction = async () => {
+    if (!sharingSave) return;
+
+    // If code exists, copy it
+    if (sharingSave.map_code) {
+      navigator.clipboard.writeText(sharingSave.map_code);
+      setSharingSave(null);
+      return;
+    }
+
+    // Generate new UUID and update DB
+    const newCode = crypto.randomUUID();
+    const { error } = await supabase
+      .from("Saved_Maps")
+      .update({ map_code: newCode })
+      .eq("save_id", sharingSave.save_id);
+
+    if (error) throw error;
+
+    // Update local state to reflect the change immediately
+    setSaves(prev => prev.map(s => s.save_id === sharingSave.save_id ? { ...s, map_code: newCode } : s));
+    setSharingSave(null);
+  };
+
+  const deleteMapCode = async () => {
+    if (!sharingSave) return;
+    const { error } = await supabase
+      .from("Saved_Maps")
+      .update({ map_code: null })
+      .eq("save_id", sharingSave.save_id);
+
+    if (error) throw error;
+
+    // Update local state to revert to "Create Code"
+    setSaves(prev => prev.map(s => s.save_id === sharingSave.save_id ? { ...s, map_code: null } : s));
+    setSharingSave(null);
+    setIsDeletingCode(false);
   };
 
   const confirmDelete = async () => {
@@ -346,7 +388,39 @@ const Saves: React.FC = () => {
                 <div style={{ color: "#777", fontSize: "12px", fontFamily: "monospace" }}>
                   {new Date(save.created_at).toLocaleDateString()}
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+
+                {/* BUTTONS CONTAINER */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  {/* SHARE / VIEW CODE BUTTON */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSharingSave(save); // Triggers the modal logic
+                    }}
+                    style={{
+                      background: "transparent",
+                      color: save.map_code ? "#f65dfb" : "#aaa",
+                      border: `1px solid ${save.map_code ? "#f65dfb" : "#444"}`,
+                      padding: "6px 14px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "10px",
+                      fontWeight: "bold",
+                      textTransform: "uppercase",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = save.map_code ? "#f65dfb" : "#444";
+                      e.currentTarget.style.color = "white";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = save.map_code ? "#f65dfb" : "#aaa";
+                    }}
+                  >
+                    {save.map_code ? "View Code" : "Create Code"}
+                  </button>
+
+                  {/* DELETE BUTTON */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -381,6 +455,68 @@ const Saves: React.FC = () => {
         )}
       </div>
 
+      {/* SHARE / VIEW CODE MODAL */}
+      <CustomModal
+        isOpen={!!sharingSave && !isDeletingCode}
+        title={sharingSave?.map_code ? "Strategy Share Code" : "Generate Share Code?"}
+        confirmText={sharingSave?.map_code ? "Copy Code" : "Confirm & Generate"}
+        onConfirm={handleShareAction}
+        onCancel={() => setSharingSave(null)}
+      >
+        {sharingSave?.map_code ? (
+          <div>
+            <div style={{ 
+              padding: "15px", 
+              background: "#000", 
+              borderRadius: "6px", 
+              color: "#f65dfb", 
+              fontFamily: "monospace", 
+              marginBottom: "20px",
+              border: "1px solid #333" 
+            }}>
+              {sharingSave.map_code}
+            </div>
+            
+            {/* DELETE CODE BUTTON - Placed inside children to allow 3-button layout */}
+            <button
+              onClick={() => setIsDeletingCode(true)}
+              style={{
+                background: "transparent",
+                color: "#ff4d4d",
+                border: "1px solid #ff4d4d",
+                width: "100%",
+                padding: "10px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "12px",
+                marginBottom: "10px",
+                transition: "0.2s"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 77, 77, 0.1)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              DELETE CODE
+            </button>
+          </div>
+        ) : (
+          "Would you like to generate a unique share code for this strategy?"
+        )}
+      </CustomModal>
+
+      {/* DELETE CODE CONFIRMATION */}
+      <CustomModal
+        isOpen={isDeletingCode}
+        title="Delete Share Code?"
+        confirmText="Yes, Delete It"
+        confirmColor="#ff4d4d"
+        onConfirm={deleteMapCode}
+        onCancel={() => setIsDeletingCode(false)}
+      >
+        Are you sure? This code will no longer work for anyone you have shared it with. 
+        You can generate a new one later.
+      </CustomModal>
+      
       {/* DELETE CONFIRMATION MODAL */}
       <CustomModal
         isOpen={!!deleteTarget}

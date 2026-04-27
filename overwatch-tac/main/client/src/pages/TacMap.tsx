@@ -178,6 +178,9 @@ const TacMap: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [activeSaveId, setActiveSaveId] = useState<string | null>(loadId);
+  const [importCode, setImportCode] = useState("");
+  const [isLoadSuccessModal, setIsLoadSuccessModal] = useState(false);
+  const [isLoadErrorModal, setIsLoadErrorModal] = useState(false);
   
   const [activeTool, setActiveTool] = useState<ToolType | null>(null);
   const [brushSize, setBrushSize] = useState<number>(4);
@@ -292,6 +295,31 @@ const TacMap: React.FC = () => {
     drawCanvas();
   }, [drawings, selectedElement, activeTool, mousePos, brushSize, isSlidingBrush, linePreview, lineStart, circlePreview, circleStart, dragSelectRect, selectedMarkerIds]);
 
+  const handleImportCode = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && importCode.trim() !== "") {
+      try {
+        // Search for the save_id associated with this map_code
+        const { data, error } = await supabase
+          .from("Saved_Maps")
+          .select("save_id")
+          .eq("map_code", importCode.trim())
+          .single();
+
+        if (error || !data) {
+          setIsLoadErrorModal(true);
+          return;
+        }
+
+        // If found, update the URL and trigger the existing load logic
+        setSearchParams({ load: data.save_id });
+        setIsLoadSuccessModal(true);
+        setImportCode(""); // Clear input
+      } catch (err) {
+        setIsLoadErrorModal(true);
+      }
+    }
+  };
+  
   const pushToHistory = (newMarkers: Marker[], newDrawings: DrawingLine[]) => {
     const nextState = { markers: newMarkers, drawings: newDrawings };
     const updatedHistory = history.slice(0, historyIndex + 1);
@@ -966,6 +994,39 @@ const TacMap: React.FC = () => {
         flexDirection: "column", padding: sidebarOpen ? "20px" : "0px", overflowY: "auto",
         transition: "width 0.3s ease", flexShrink: 0
       }}>
+        {/* Import Code Input */}
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ 
+            display: "block", 
+            color: "#f65dfb", 
+            fontSize: "10px", 
+            fontWeight: "bold", 
+            marginBottom: "8px",
+            letterSpacing: "1px" 
+          }}>
+            IMPORT STRATEGY CODE
+          </label>
+          <input
+            type="text"
+            value={importCode}
+            onChange={(e) => setImportCode(e.target.value)}
+            onKeyDown={handleImportCode}
+            placeholder="Paste save code and press enter..."
+            style={{
+              width: "100%",
+              background: "#111",
+              color: "#f65dfb",
+              border: "1px solid #333",
+              borderRadius: "4px",
+              padding: "10px",
+              fontSize: "12px",
+              outline: "none",
+              transition: "border-color 0.2s"
+            }}
+            onFocus={(e) => e.currentTarget.style.borderColor = "#f65dfb"}
+            onBlur={(e) => e.currentTarget.style.borderColor = "#333"}
+          />
+        </div>
         <div style={{ minWidth: "310px" }}>
           <div style={{ fontSize: "20px", marginBottom: "20px", fontWeight: "bold" }}>
             Map: <span style={{ color: "#f65dfb" }}>{selectedMap || "None Selected"}</span>
@@ -1402,6 +1463,28 @@ const TacMap: React.FC = () => {
           Strategy titles must be <strong>30 characters</strong> or less. 
           Current length: {newStrategyName.length}
         </p>
+      </CustomModal>
+
+      {/* Import Success Modal - Cancel button removed */}
+      <CustomModal 
+        isOpen={isLoadSuccessModal} 
+        title="Strategy Loaded!" 
+        onConfirm={() => setIsLoadSuccessModal(false)} 
+        confirmText="Lets Go"
+        showCancel={false}
+      >
+        <p style={{ color: "#aaa" }}>The shared strategy has been successfully imported and loaded onto the map.</p>
+      </CustomModal>
+
+      {/* Import Error Modal */}
+      <CustomModal 
+        isOpen={isLoadErrorModal} 
+        title="Invalid Code" 
+        onConfirm={() => setIsLoadErrorModal(false)} 
+        confirmText="Try Again"
+        showCancel={false}
+      >
+        <p style={{ color: "#aaa" }}>We couldn't find a strategy with that code. Please check the code and try again.</p>
       </CustomModal>
     </div>
   );

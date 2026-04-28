@@ -10,30 +10,6 @@ A tactical analysis and visualization tool for Overwatch built with TypeScript, 
 - **Responsive Design** - Optimized for desktop and mobile viewing
 - **Tactical Insights** - Strategic recommendations based on collected data
 
-## 📦 Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/ambr9n/overwatch-tac.git
-cd overwatch-tac
-```
-
-Install dependencies:
-```
-npm install
-```
-
-Start dev server:
-```
-npm start
-```
-
-The application will be available at ``http://localhost:3000``
-
-## 📝 License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-Group 1 CSCI4485
+CSCI 4485 PROJECT
 
 ![rigby](https://media.tenor.com/_lmitpAV2egAAAAM/rigby-cat.gif)

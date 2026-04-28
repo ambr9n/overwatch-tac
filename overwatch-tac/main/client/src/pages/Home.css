@@ -1,18 +1,33 @@
 .home {
   min-height: 100vh;
   position: relative;
-  background: url(/public/images/owtacstrat.gif) center/cover no-repeat; /* Chanages image name */
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+  overflow: hidden;
 }
 
-/* Dark purple overlay */
-.home::before {
-  content: "";
+.home-bg-gif {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
+  animation: fadeIn 1s ease-in-out; /* smooth transition between gifs */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.home-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   background: linear-gradient(
     135deg,
     rgba(20, 10, 42, 0.4),
@@ -23,7 +38,7 @@
 
 .hero-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   padding: 40px;
   max-width: 900px;
 }

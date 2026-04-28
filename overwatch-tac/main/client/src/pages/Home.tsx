@@ -1,9 +1,30 @@
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import "./Home.css";
 
+const gifs = ["/images/owtacstrat1.gif", "/images/owtacstrat2.gif"];
+
 const Home = () => {
+  const [currentGif, setCurrentGif] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentGif((prev) => (prev + 1) % gifs.length);
+    }, 5000); // switches every 5 seconds, adjust as needed
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="home">
+      <img
+        className="home-bg-gif"
+        src={gifs[currentGif]}
+        alt=""
+        aria-hidden="true"
+      />
+      <div className="home-overlay" />
+
       <div className="hero-content">
         <h1 className="hero-title">
           Dominate Overwatch <br />

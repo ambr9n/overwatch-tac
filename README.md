@@ -2,7 +2,7 @@
 
 A tactical analysis and visualization tool for Overwatch built with TypeScript, designed to provide comprehensive stat tracking and advanced game insights.
 
-## 🚀 Features
+## Features
 
 - **Advanced Analytics** - Detailed statistical analysis of gameplay and performance metrics
 - **Real-time Visualization** - Interactive charts and graphs for game data
